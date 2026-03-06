@@ -1,101 +1,289 @@
 <!doctype html>
-<html lang="en">
+<html lang="lt">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>4G Live Departures Board</title>
+  <title>Šilo tiltas – 4G Live Board</title>
   <style>
-    :root { color-scheme: dark; --bg:#05070b; --line:#1f6feb; --text:#f8fafc; --muted:#9aa4b2; --border:#1f2937; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }
+    :root {
+      color-scheme: dark;
+      --bg: #05070b;
+      --panel: #0d1117;
+      --line: #1f6feb;
+      --text: #f8fafc;
+      --muted: #9aa4b2;
+      --border: #1f2937;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+    }
+
     * { box-sizing: border-box; }
-    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:Inter, Arial, sans-serif; }
-    .wrap { width:min(1100px, 100%); margin:0 auto; padding:16px; }
-    .board { background:linear-gradient(180deg,#0b0f14 0%,#090c10 100%); border:1px solid var(--border); border-radius:24px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.35); }
-    .header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:24px; border-bottom:1px solid var(--border); background:#0f141b; }
-    .title { font-size:clamp(26px,5vw,48px); font-weight:800; margin:0; }
-    .clock { text-align:right; min-width:160px; }
-    .clock-time { font-size:clamp(24px,5vw,42px); font-weight:800; line-height:1; }
-    .clock-date { margin-top:6px; color:var(--muted); font-size:14px; min-height:20px; }
-    .notice { margin:16px 24px 0; padding:14px 16px; border-radius:14px; font-size:14px; line-height:1.4; }
-    .notice.warn { background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.28); color:#fde68a; }
-    .notice.err { background:rgba(239,68,68,.10); border:1px solid rgba(239,68,68,.28); color:#fecaca; }
-    .table-head, .row { display:grid; grid-template-columns:120px 1fr 120px; gap:16px; align-items:center; }
-    .table-head { padding:16px 24px; color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.08em; border-bottom:1px solid var(--border); }
-    .rows { padding:8px 0; }
-    .row { padding:18px 24px; border-bottom:1px solid rgba(255,255,255,.05); min-height:96px; }
-    .row:last-child { border-bottom:0; }
-    .line-pill { width:88px; height:54px; border-radius:16px; display:flex; align-items:center; justify-content:center; background:var(--line); color:white; font-size:30px; font-weight:900; }
-    .destination { font-size:clamp(20px,4vw,34px); font-weight:800; line-height:1.1; }
-    .meta { margin-top:8px; color:var(--muted); font-size:14px; }
-    .eta { text-align:right; font-size:clamp(24px,5vw,40px); font-weight:900; line-height:1; }
-    .eta small { display:block; margin-top:6px; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; }
-    .statusbar { display:flex; justify-content:space-between; gap:16px; padding:16px 24px 24px; color:var(--muted); font-size:14px; border-top:1px solid var(--border); flex-wrap:wrap; }
-    .empty { margin:20px 24px; padding:18px; border-radius:16px; font-size:18px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); }
-    .dot { display:inline-block; width:10px; height:10px; border-radius:999px; margin-right:8px; background:var(--ok); vertical-align:middle; box-shadow:0 0 0 0 rgba(34,197,94,.7); animation:pulse 1.8s infinite; }
-    @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(34,197,94,.7);} 70% { box-shadow:0 0 0 14px rgba(34,197,94,0);} 100% { box-shadow:0 0 0 0 rgba(34,197,94,0);} }
-    @media (max-width:760px) {
-      .wrap { padding:10px; }
-      .board { border-radius:18px; }
-      .header { flex-direction:column; align-items:flex-start; padding:18px; }
-      .clock { text-align:left; min-width:0; }
-      .table-head { display:none; }
-      .row { grid-template-columns:1fr; gap:12px; padding:18px; min-height:auto; }
-      .eta { text-align:left; }
-      .statusbar { padding:14px 18px 18px; }
-      .notice { margin:12px 18px 0; }
-      .empty { margin:16px 18px; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .board {
+      width: min(1100px, 100%);
+      background: linear-gradient(180deg, #0b0f14 0%, #090c10 100%);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 30px 80px rgba(0,0,0,.45);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      padding: 28px 32px;
+      border-bottom: 1px solid var(--border);
+      background: #0f141b;
+    }
+
+    .stop-name {
+      font-size: clamp(30px, 5vw, 52px);
+      font-weight: 800;
+      letter-spacing: .02em;
+      margin: 0;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: clamp(14px, 2vw, 20px);
+    }
+
+    .clock {
+      text-align: right;
+      min-width: 180px;
+    }
+
+    .clock-time {
+      font-size: clamp(28px, 5vw, 48px);
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .clock-date {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 16px;
+      min-height: 24px;
+    }
+
+    .table-head,
+    .row {
+      display: grid;
+      grid-template-columns: 160px 1fr 180px;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .table-head {
+      padding: 16px 32px;
+      color: var(--muted);
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .rows {
+      padding: 8px 0;
+    }
+
+    .row {
+      padding: 20px 32px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+      min-height: 108px;
+    }
+
+    .row:last-child {
+      border-bottom: 0;
+    }
+
+    .line-pill {
+      width: 108px;
+      height: 64px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--line);
+      color: white;
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: .03em;
+    }
+
+    .destination {
+      font-size: clamp(24px, 4vw, 38px);
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .eta {
+      text-align: right;
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .eta small {
+      display: block;
+      margin-top: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .statusbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 16px 32px 24px;
+      color: var(--muted);
+      font-size: 15px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .empty,
+    .error {
+      margin: 24px 32px;
+      padding: 22px;
+      border-radius: 20px;
+      font-size: 20px;
+    }
+
+    .empty {
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    .error {
+      background: rgba(239,68,68,.08);
+      border: 1px solid rgba(239,68,68,.28);
+      color: #fecaca;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      margin-right: 8px;
+      background: var(--ok);
+      vertical-align: middle;
+      box-shadow: 0 0 0 0 rgba(34,197,94,.7);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(34,197,94,.7); }
+      70% { box-shadow: 0 0 0 14px rgba(34,197,94,0); }
+      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+
+    @media (max-width: 760px) {
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .clock {
+        text-align: left;
+      }
+      .table-head {
+        display: none;
+      }
+      .row {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        padding: 22px;
+      }
+      .eta {
+        text-align: left;
+      }
+      .line-pill {
+        width: 92px;
+        height: 56px;
+        font-size: 30px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <main class="board">
-      <section class="header">
-        <h1 class="title">4G Live Departures Board</h1>
-        <div class="clock">
-          <div class="clock-time" id="clockTime">--:--</div>
-          <div class="clock-date" id="clockDate">--</div>
+  <main class="board">
+    <section class="header">
+      <div>
+        <h1 class="stop-name">4G Live Departures Board</h1>
+      </div>
+      <div class="clock">
+        <div class="clock-time" id="clockTime">--:--</div>
+        <div class="clock-date" id="clockDate">--</div>
+      </div>
+    </section>
+
+    <section class="table-head">
+      <div>Line</div>
+      <div>Destination</div>
+      <div style="text-align:right;">Arrival</div>
+    </section>
+
+    <section class="rows" id="rows"></section>
+    <div class="error" id="error" hidden></div>
+
+    <footer class="statusbar">
+      <div id="status"><span class="dot"></span>Connecting to live data…</div>
+      <div id="updated">Not updated yet</div>
+      <div id="qrWrap" style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+        <img id="qrImage" alt="QR code for this board" style="width:84px;height:84px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:white;padding:6px;" />
+        <div style="max-width:180px; line-height:1.35;">
+          <div style="font-weight:700; color:var(--text);">Open on your phone</div>
+          <div style="color:var(--muted); font-size:13px;">Scan the QR code after you publish this page.</div>
         </div>
-      </section>
-
-      <div id="setupNotice" class="notice warn" hidden></div>
-      <div id="errorNotice" class="notice err" hidden></div>
-
-      <section class="table-head">
-        <div>Line</div>
-        <div>Destination</div>
-        <div style="text-align:right;">Arrival</div>
-      </section>
-
-      <section class="rows" id="rows">
-        <div class="empty">Loading live departures…</div>
-      </section>
-
-      <footer class="statusbar">
-        <div id="status"><span class="dot"></span>Connecting to live data…</div>
-        <div id="updated">Not updated yet</div>
-      </footer>
-    </main>
-  </div>
+      </div>
+    </footer>
+  </main>
 
   <script>
     const CONFIG = {
+      stopName: 'Šilo tiltas',
       line: '4G',
       stopIds: ['1139', '1129'],
       refreshMs: 20000,
       proxy: '',
-      publicUrl: 'https://skujic.github.io/4g-live-board/',
-      soundAlertMinutes: [1, 2],
+      publicUrl: 'https://skujic.github.io/4g-live-board/',      soundAlertMinutes: [1, 2],
       sourceUrl: stopId => `https://www.stops.lt/vilnius/departures2.php?stopid=${stopId}`
     };
 
     const el = {
       rows: document.getElementById('rows'),
+      error: document.getElementById('error'),
       status: document.getElementById('status'),
       updated: document.getElementById('updated'),
       clockTime: document.getElementById('clockTime'),
       clockDate: document.getElementById('clockDate'),
-      setupNotice: document.getElementById('setupNotice'),
-      errorNotice: document.getElementById('errorNotice')
+      qrImage: document.getElementById('qrImage')
     };
 
     const alertState = new Set();
@@ -105,30 +293,24 @@
     function updateClock() {
       const now = new Date();
       const nextTime = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });
-      const nextDate = now.toLocaleDateString('lt-LT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      if (nextTime !== lastRenderedTime) { el.clockTime.textContent = nextTime; lastRenderedTime = nextTime; }
-      if (nextDate !== lastRenderedDate) { el.clockDate.textContent = nextDate; lastRenderedDate = nextDate; }
-    }
+      const nextDate = now.toLocaleDateString('lt-LT', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
 
-    function showSetupNotice() {
-      const isFile = location.protocol === 'file:';
-      if (isFile) {
-        el.setupNotice.hidden = false;
-        el.setupNotice.textContent = 'This page is opened as a local file. On phones, the QR code must point to a real hosted URL. Publish the file first, then set CONFIG.publicUrl to that URL.';
-      } else if (!CONFIG.publicUrl) {
-        el.setupNotice.hidden = false;
-        el.setupNotice.textContent = 'Set CONFIG.publicUrl after publishing so the QR code opens the hosted page on your phone.';
+      if (nextTime !== lastRenderedTime) {
+        el.clockTime.textContent = nextTime;
+        lastRenderedTime = nextTime;
+      }
+
+      if (nextDate !== lastRenderedDate) {
+        el.clockDate.textContent = nextDate;
+        lastRenderedDate = nextDate;
       }
     }
 
-    function showError(message) {
-      el.errorNotice.hidden = false;
-      el.errorNotice.textContent = message;
-    }
-
-    function clearError() {
-      el.errorNotice.hidden = true;
-      el.errorNotice.textContent = '';
+    function initQrCode() {
+      const target = CONFIG.publicUrl || window.location.href;
+      el.qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(target)}`;
     }
 
     function playAlertBeep() {
@@ -154,14 +336,19 @@
     }
 
     function maybePlayArrivalAlert(arrivals) {
-      const tracked = new Set();
+      const trackedKeys = new Set();
       for (const item of arrivals) {
         if (!CONFIG.soundAlertMinutes.includes(item.minutes)) continue;
         const key = `${item.destination}|${item.minutes}`;
-        tracked.add(key);
-        if (!alertState.has(key)) { alertState.add(key); playAlertBeep(); }
+        trackedKeys.add(key);
+        if (!alertState.has(key)) {
+          alertState.add(key);
+          playAlertBeep();
+        }
       }
-      for (const existing of Array.from(alertState)) if (!tracked.has(existing)) alertState.delete(existing);
+      for (const existing of Array.from(alertState)) {
+        if (!trackedKeys.has(existing)) alertState.delete(existing);
+      }
     }
 
     function fetchUrl(url) {
@@ -194,12 +381,12 @@
     }
 
     function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+      return s.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
     }
 
     function parseDepartures(html, stopId) {
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      const text = doc.body ? (doc.body.innerText || '') : '';
+      const text = doc.body?.innerText || '';
       const candidates = [];
       const rows = Array.from(doc.querySelectorAll('tr, li, .departure, .times, .time, .item'));
 
@@ -209,9 +396,9 @@
         const minuteMatch = rowText.match(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/);
         const routeMatch = rowText.match(/\b(\d+G?|N\d+)\b/);
         const destination = rowText.replace(/\b(\d+G?|N\d+)\b/, '').replace(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/, '').trim();
-        const minutes = textMinutes(minuteMatch && minuteMatch[0] ? minuteMatch[0] : '');
-        if ((routeMatch && routeMatch[1] ? routeMatch[1] : '') === CONFIG.line && minutes !== null) {
-          candidates.push({ line: CONFIG.line, destination: destination || 'Direction unavailable', minutes, stopId });
+        const minutes = textMinutes(minuteMatch?.[0] || '');
+        if ((routeMatch?.[1] || '') === CONFIG.line && minutes !== null) {
+          candidates.push({ line: CONFIG.line, destination: destination || 'Kryptis nerasta', minutes, stopId, raw: rowText });
         }
       }
 
@@ -221,19 +408,25 @@
           const raw = match[0].replace(/\s+/g, ' ').trim();
           const minutes = textMinutes(match[1]);
           if (minutes !== null) {
-            const destination = raw.replace(new RegExp(`\\b${CONFIG.line}\\b`), '').replace(/(\d+\s*min|atvyksta|Atvyksta|\b\d+\b)/, '').trim() || 'Direction unavailable';
-            candidates.push({ line: CONFIG.line, destination, minutes, stopId });
+            const destination = raw
+              .replace(new RegExp(`\\b${CONFIG.line}\\b`), '')
+              .replace(/(\d+\s*min|atvyksta|Atvyksta|\b\d+\b)/, '')
+              .trim() || 'Kryptis nerasta';
+            candidates.push({ line: CONFIG.line, destination, minutes, stopId, raw });
           }
         }
       }
 
-      return uniqueBy(candidates, x => `${x.destination}|${x.minutes}|${x.stopId}`).sort((a, b) => a.minutes - b.minutes).slice(0, 6);
+      return uniqueBy(candidates, x => `${x.destination}|${x.minutes}|${x.stopId}`)
+        .sort((a, b) => a.minutes - b.minutes)
+        .slice(0, 6);
     }
 
     function render(arrivals) {
-      clearError();
+      el.error.hidden = true;
+
       if (!arrivals.length) {
-        el.rows.innerHTML = '<div class="empty">No live 4G departures found right now.</div>';
+        el.rows.innerHTML = `<div class="empty">No live 4G departures found right now.</div>`;
         return;
       }
 
@@ -265,10 +458,7 @@
       const okCount = results.filter(r => r.status === 'fulfilled').length;
 
       if (!arrivals.length && okCount === 0) {
-        showError('This page loaded, but live departures could not be read. Most likely cause: the mobile browser is blocked by CORS. Add a tiny proxy in CONFIG.proxy before publishing.');
-        el.status.textContent = 'Live data unavailable';
-        el.rows.innerHTML = '<div class="empty">The page is working, but the live data source is blocked on this device.</div>';
-        return;
+        throw new Error('The browser could not read live data. This is usually a CORS block. Add a tiny proxy URL in CONFIG.proxy before publishing.');
       }
 
       const merged = uniqueBy(arrivals, x => `${x.destination}|${x.minutes}`).sort((a, b) => a.minutes - b.minutes).slice(0, 4);
@@ -283,14 +473,15 @@
       try {
         await load();
       } catch (err) {
-        showError(err && err.message ? err.message : 'Unknown error');
-        el.status.textContent = 'Page loaded, but data failed';
-        el.rows.innerHTML = '<div class="empty">The page is not blank anymore. A setup issue is being shown above.</div>';
+        el.error.hidden = false;
+        el.error.textContent = err.message;
+        el.status.textContent = 'Live data unavailable';
+        el.rows.innerHTML = '';
       }
     }
 
     updateClock();
-    showSetupNotice();
+    initQrCode();
     refreshLoop();
     setInterval(updateClock, 1000);
     setInterval(refreshLoop, CONFIG.refreshMs);
