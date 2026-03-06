@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4G Live Departures Board</title>
+  <style>
+    :root { color-scheme: dark; --bg:#05070b; --line:#1f6feb; --text:#f8fafc; --muted:#9aa4b2; --border:#1f2937; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:Inter, Arial, sans-serif; }
+    .wrap { width:min(1100px, 100%); margin:0 auto; padding:16px; }
+    .board { background:linear-gradient(180deg,#0b0f14 0%,#090c10 100%); border:1px solid var(--border); border-radius:24px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+    .header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:24px; border-bottom:1px solid var(--border); background:#0f141b; }
+    .title { font-size:clamp(26px,5vw,48px); font-weight:800; margin:0; }
+    .clock { text-align:right; min-width:160px; }
+    .clock-time { font-size:clamp(24px,5vw,42px); font-weight:800; line-height:1; }
+    .clock-date { margin-top:6px; color:var(--muted); font-size:14px; min-height:20px; }
+    .notice { margin:16px 24px 0; padding:14px 16px; border-radius:14px; font-size:14px; line-height:1.4; }
+    .notice.warn { background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.28); color:#fde68a; }
+    .notice.err { background:rgba(239,68,68,.10); border:1px solid rgba(239,68,68,.28); color:#fecaca; }
+    .table-head, .row { display:grid; grid-template-columns:120px 1fr 120px; gap:16px; align-items:center; }
+    .table-head { padding:16px 24px; color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.08em; border-bottom:1px solid var(--border); }
+    .rows { padding:8px 0; }
+    .row { padding:18px 24px; border-bottom:1px solid rgba(255,255,255,.05); min-height:96px; }
+    .row:last-child { border-bottom:0; }
+    .line-pill { width:88px; height:54px; border-radius:16px; display:flex; align-items:center; justify-content:center; background:var(--line); color:white; font-size:30px; font-weight:900; }
+    .destination { font-size:clamp(20px,4vw,34px); font-weight:800; line-height:1.1; }
+    .meta { margin-top:8px; color:var(--muted); font-size:14px; }
+    .eta { text-align:right; font-size:clamp(24px,5vw,40px); font-weight:900; line-height:1; }
+    .eta small { display:block; margin-top:6px; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; }
+    .statusbar { display:flex; justify-content:space-between; gap:16px; padding:16px 24px 24px; color:var(--muted); font-size:14px; border-top:1px solid var(--border); flex-wrap:wrap; }
+    .empty { margin:20px 24px; padding:18px; border-radius:16px; font-size:18px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:999px; margin-right:8px; background:var(--ok); vertical-align:middle; box-shadow:0 0 0 0 rgba(34,197,94,.7); animation:pulse 1.8s infinite; }
+    @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(34,197,94,.7);} 70% { box-shadow:0 0 0 14px rgba(34,197,94,0);} 100% { box-shadow:0 0 0 0 rgba(34,197,94,0);} }
+    @media (max-width:760px) {
+      .wrap { padding:10px; }
+      .board { border-radius:18px; }
+      .header { flex-direction:column; align-items:flex-start; padding:18px; }
+      .clock { text-align:left; min-width:0; }
+      .table-head { display:none; }
+      .row { grid-template-columns:1fr; gap:12px; padding:18px; min-height:auto; }
+      .eta { text-align:left; }
+      .statusbar { padding:14px 18px 18px; }
+      .notice { margin:12px 18px 0; }
+      .empty { margin:16px 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <main class="board">
+      <section class="header">
+        <h1 class="title">4G Live Departures Board</h1>
+        <div class="clock">
+          <div class="clock-time" id="clockTime">--:--</div>
+          <div class="clock-date" id="clockDate">--</div>
+        </div>
+      </section>
+
+      <div id="setupNotice" class="notice warn" hidden></div>
+      <div id="errorNotice" class="notice err" hidden></div>
+
+      <section class="table-head">
+        <div>Line</div>
+        <div>Destination</div>
+        <div style="text-align:right;">Arrival</div>
+      </section>
+
+      <section class="rows" id="rows">
+        <div class="empty">Loading live departures…</div>
+      </section>
+
+      <footer class="statusbar">
+        <div id="status"><span class="dot"></span>Connecting to live data…</div>
+        <div id="updated">Not updated yet</div>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const CONFIG = {
+      line: '4G',
+      stopIds: ['1139', '1129'],
+      refreshMs: 20000,
+      proxy: '',
+      publicUrl: '',
+      soundAlertMinutes: [1, 2],
+      sourceUrl: stopId => `https://www.stops.lt/vilnius/departures2.php?stopid=${stopId}`
+    };
+
+    const el = {
+      rows: document.getElementById('rows'),
+      status: document.getElementById('status'),
+      updated: document.getElementById('updated'),
+      clockTime: document.getElementById('clockTime'),
+      clockDate: document.getElementById('clockDate'),
+      setupNotice: document.getElementById('setupNotice'),
+      errorNotice: document.getElementById('errorNotice')
+    };
+
+    const alertState = new Set();
+    let lastRenderedTime = '';
+    let lastRenderedDate = '';
+
+    function updateClock() {
+      const now = new Date();
+      const nextTime = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });
+      const nextDate = now.toLocaleDateString('lt-LT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      if (nextTime !== lastRenderedTime) { el.clockTime.textContent = nextTime; lastRenderedTime = nextTime; }
+      if (nextDate !== lastRenderedDate) { el.clockDate.textContent = nextDate; lastRenderedDate = nextDate; }
+    }
+
+    function showSetupNotice() {
+      const isFile = location.protocol === 'file:';
+      if (isFile) {
+        el.setupNotice.hidden = false;
+        el.setupNotice.textContent = 'This page is opened as a local file. On phones, the QR code must point to a real hosted URL. Publish the file first, then set CONFIG.publicUrl to that URL.';
+      } else if (!CONFIG.publicUrl) {
+        el.setupNotice.hidden = false;
+        el.setupNotice.textContent = 'Set CONFIG.publicUrl after publishing so the QR code opens the hosted page on your phone.';
+      }
+    }
+
+    function showError(message) {
+      el.errorNotice.hidden = false;
+      el.errorNotice.textContent = message;
+    }
+
+    function clearError() {
+      el.errorNotice.hidden = true;
+      el.errorNotice.textContent = '';
+    }
+
+    function playAlertBeep() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        [880, 1174].forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02 + i * 0.18);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16 + i * 0.18);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + i * 0.18);
+          osc.stop(now + 0.18 + i * 0.18);
+        });
+      } catch (e) {}
+    }
+
+    function maybePlayArrivalAlert(arrivals) {
+      const tracked = new Set();
+      for (const item of arrivals) {
+        if (!CONFIG.soundAlertMinutes.includes(item.minutes)) continue;
+        const key = `${item.destination}|${item.minutes}`;
+        tracked.add(key);
+        if (!alertState.has(key)) { alertState.add(key); playAlertBeep(); }
+      }
+      for (const existing of Array.from(alertState)) if (!tracked.has(existing)) alertState.delete(existing);
+    }
+
+    function fetchUrl(url) {
+      return fetch(CONFIG.proxy ? `${CONFIG.proxy}${encodeURIComponent(url)}` : url, {
+        headers: { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' }
+      }).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      });
+    }
+
+    function textMinutes(text) {
+      const t = (text || '').trim().toLowerCase();
+      if (!t) return null;
+      if (t.includes('atvyk') || t === '0' || t === '0 min') return 0;
+      const m = t.match(/(\d+)\s*min/);
+      if (m) return Number(m[1]);
+      if (/^\d+$/.test(t)) return Number(t);
+      return null;
+    }
+
+    function uniqueBy(items, keyFn) {
+      const seen = new Set();
+      return items.filter(item => {
+        const key = keyFn(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+    }
+
+    function parseDepartures(html, stopId) {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const text = doc.body ? (doc.body.innerText || '') : '';
+      const candidates = [];
+      const rows = Array.from(doc.querySelectorAll('tr, li, .departure, .times, .time, .item'));
+
+      for (const row of rows) {
+        const rowText = row.textContent.replace(/\s+/g, ' ').trim();
+        if (!rowText || !rowText.includes(CONFIG.line)) continue;
+        const minuteMatch = rowText.match(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/);
+        const routeMatch = rowText.match(/\b(\d+G?|N\d+)\b/);
+        const destination = rowText.replace(/\b(\d+G?|N\d+)\b/, '').replace(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/, '').trim();
+        const minutes = textMinutes(minuteMatch && minuteMatch[0] ? minuteMatch[0] : '');
+        if ((routeMatch && routeMatch[1] ? routeMatch[1] : '') === CONFIG.line && minutes !== null) {
+          candidates.push({ line: CONFIG.line, destination: destination || 'Direction unavailable', minutes, stopId });
+        }
+      }
+
+      if (!candidates.length && text.includes(CONFIG.line)) {
+        const regex = new RegExp(`\\b${CONFIG.line}\\b[^\\n]{0,120}?(\\d+\\s*min|atvyksta|Atvyksta|\\b\\d+\\b)`, 'g');
+        for (const match of text.matchAll(regex)) {
+          const raw = match[0].replace(/\s+/g, ' ').trim();
+          const minutes = textMinutes(match[1]);
+          if (minutes !== null) {
+            const destination = raw.replace(new RegExp(`\\b${CONFIG.line}\\b`), '').replace(/(\d+\s*min|atvyksta|Atvyksta|\b\d+\b)/, '').trim() || 'Direction unavailable';
+            candidates.push({ line: CONFIG.line, destination, minutes, stopId });
+          }
+        }
+      }
+
+      return uniqueBy(candidates, x => `${x.destination}|${x.minutes}|${x.stopId}`).sort((a, b) => a.minutes - b.minutes).slice(0, 6);
+    }
+
+    function render(arrivals) {
+      clearError();
+      if (!arrivals.length) {
+        el.rows.innerHTML = '<div class="empty">No live 4G departures found right now.</div>';
+        return;
+      }
+
+      el.rows.innerHTML = arrivals.map(item => {
+        const eta = item.minutes === 0 ? 'Now' : `${item.minutes} min`;
+        return `
+          <article class="row">
+            <div><div class="line-pill">${escapeHtml(item.line)}</div></div>
+            <div>
+              <div class="destination">${escapeHtml(item.destination)}</div>
+              <div class="meta">Stop source ID ${escapeHtml(item.stopId)}</div>
+            </div>
+            <div class="eta">${eta}<small>live</small></div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    async function load() {
+      el.status.innerHTML = '<span class="dot"></span>Refreshing live data…';
+      const results = await Promise.allSettled(
+        CONFIG.stopIds.map(async stopId => {
+          const html = await fetchUrl(CONFIG.sourceUrl(stopId));
+          return parseDepartures(html, stopId);
+        })
+      );
+
+      const arrivals = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+      const okCount = results.filter(r => r.status === 'fulfilled').length;
+
+      if (!arrivals.length && okCount === 0) {
+        showError('This page loaded, but live departures could not be read. Most likely cause: the mobile browser is blocked by CORS. Add a tiny proxy in CONFIG.proxy before publishing.');
+        el.status.textContent = 'Live data unavailable';
+        el.rows.innerHTML = '<div class="empty">The page is working, but the live data source is blocked on this device.</div>';
+        return;
+      }
+
+      const merged = uniqueBy(arrivals, x => `${x.destination}|${x.minutes}`).sort((a, b) => a.minutes - b.minutes).slice(0, 4);
+      render(merged);
+      maybePlayArrivalAlert(merged);
+      el.status.innerHTML = `<span class="dot"></span>${okCount === CONFIG.stopIds.length ? 'Live data OK' : `Partial live data OK (${okCount}/${CONFIG.stopIds.length})`}`;
+      el.updated.textContent = `Updated: ${new Date().toLocaleTimeString('lt-LT')}`;
+    }
+
+    async function refreshLoop() {
+      updateClock();
+      try {
+        await load();
+      } catch (err) {
+        showError(err && err.message ? err.message : 'Unknown error');
+        el.status.textContent = 'Page loaded, but data failed';
+        el.rows.innerHTML = '<div class="empty">The page is not blank anymore. A setup issue is being shown above.</div>';
+      }
+    }
+
+    updateClock();
+    showSetupNotice();
+    refreshLoop();
+    setInterval(updateClock, 1000);
+    setInterval(refreshLoop, CONFIG.refreshMs);
+  </script>
+</body>
+</html>
