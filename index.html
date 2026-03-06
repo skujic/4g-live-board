@@ -210,9 +210,23 @@
 
       .table-head {
         display: grid;
-        grid-template-columns: 120px 1fr 120px;
-        font-size: 12px;
-        padding: 12px 20px;
+        grid-template-columns: 72px 1fr 72px;
+        gap: 10px;
+        font-size: 10px;
+        letter-spacing: .05em;
+        padding: 12px 18px;
+      }
+
+      .table-head > :first-child {
+        text-align: left;
+      }
+
+      .table-head > :nth-child(2) {
+        text-align: left;
+      }
+
+      .table-head > :last-child {
+        text-align: right;
       }
 
       .row {
@@ -253,7 +267,7 @@
     <section class="table-head">
       <div>Line</div>
       <div>Destination</div>
-      <div style="text-align:right;">Arrival</div>
+      <div>Arrival</div>
     </section>
 
     <section class="rows" id="rows"></section>
