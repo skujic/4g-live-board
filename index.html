@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="lt">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Šilo tiltas – 4G Live Board</title>
+  <title>4G Live Departures Board</title>
   <style>
     :root {
       color-scheme: dark;
@@ -56,12 +56,6 @@
       font-weight: 800;
       letter-spacing: .02em;
       margin: 0;
-    }
-
-    .subtitle {
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: clamp(14px, 2vw, 20px);
     }
 
     .clock {
@@ -228,6 +222,10 @@
         height: 56px;
         font-size: 30px;
       }
+      #qrWrap {
+        width: 100%;
+        margin-left: 0 !important;
+      }
     }
   </style>
 </head>
@@ -272,7 +270,8 @@
       stopIds: ['1139', '1129'],
       refreshMs: 20000,
       proxy: '',
-      publicUrl: 'https://skujic.github.io/4g-live-board/',      soundAlertMinutes: [1, 2],
+      publicUrl: 'https://skujic.github.io/4g-live-board/',
+      soundAlertMinutes: [1, 2],
       sourceUrl: stopId => `https://www.stops.lt/vilnius/departures2.php?stopid=${stopId}`
     };
 
@@ -292,9 +291,15 @@
 
     function updateClock() {
       const now = new Date();
-      const nextTime = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });
-      const nextDate = now.toLocaleDateString('lt-LT', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      const nextTime = now.toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const nextDate = now.toLocaleDateString('en-GB', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
       });
 
       if (nextTime !== lastRenderedTime) {
@@ -310,7 +315,19 @@
 
     function initQrCode() {
       const target = CONFIG.publicUrl || window.location.href;
-      el.qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(target)}`;
+
+      el.qrImage.onerror = () => {
+        const wrap = document.getElementById('qrWrap');
+        wrap.innerHTML = `
+          <div style="color: var(--muted); font-size: 13px;">
+            QR code could not load.<br>
+            Open this link on your phone:<br>
+            <a href="${target}" style="color: white; word-break: break-all;">${target}</a>
+          </div>
+        `;
+      };
+
+      el.qrImage.src = `https://quickchart.io/qr?text=${encodeURIComponent(target)}&size=220`;
     }
 
     function playAlertBeep() {
@@ -381,7 +398,13 @@
     }
 
     function escapeHtml(s) {
-      return s.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+      return String(s).replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[ch]));
     }
 
     function parseDepartures(html, stopId) {
@@ -395,10 +418,20 @@
         if (!rowText || !rowText.includes(CONFIG.line)) continue;
         const minuteMatch = rowText.match(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/);
         const routeMatch = rowText.match(/\b(\d+G?|N\d+)\b/);
-        const destination = rowText.replace(/\b(\d+G?|N\d+)\b/, '').replace(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/, '').trim();
+        const destination = rowText
+          .replace(/\b(\d+G?|N\d+)\b/, '')
+          .replace(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/, '')
+          .trim();
         const minutes = textMinutes(minuteMatch?.[0] || '');
+
         if ((routeMatch?.[1] || '') === CONFIG.line && minutes !== null) {
-          candidates.push({ line: CONFIG.line, destination: destination || 'Kryptis nerasta', minutes, stopId, raw: rowText });
+          candidates.push({
+            line: CONFIG.line,
+            destination: destination || 'Direction unavailable',
+            minutes,
+            stopId,
+            raw: rowText
+          });
         }
       }
 
@@ -411,7 +444,7 @@
             const destination = raw
               .replace(new RegExp(`\\b${CONFIG.line}\\b`), '')
               .replace(/(\d+\s*min|atvyksta|Atvyksta|\b\d+\b)/, '')
-              .trim() || 'Kryptis nerasta';
+              .trim() || 'Direction unavailable';
             candidates.push({ line: CONFIG.line, destination, minutes, stopId, raw });
           }
         }
@@ -461,11 +494,14 @@
         throw new Error('The browser could not read live data. This is usually a CORS block. Add a tiny proxy URL in CONFIG.proxy before publishing.');
       }
 
-      const merged = uniqueBy(arrivals, x => `${x.destination}|${x.minutes}`).sort((a, b) => a.minutes - b.minutes).slice(0, 4);
+      const merged = uniqueBy(arrivals, x => `${x.destination}|${x.minutes}`)
+        .sort((a, b) => a.minutes - b.minutes)
+        .slice(0, 4);
+
       render(merged);
       maybePlayArrivalAlert(merged);
       el.status.innerHTML = `<span class="dot"></span>${okCount === CONFIG.stopIds.length ? 'Live data OK' : `Partial live data OK (${okCount}/${CONFIG.stopIds.length})`}`;
-      el.updated.textContent = `Updated: ${new Date().toLocaleTimeString('lt-LT')}`;
+      el.updated.textContent = `Updated: ${new Date().toLocaleTimeString('en-GB')}`;
     }
 
     async function refreshLoop() {
