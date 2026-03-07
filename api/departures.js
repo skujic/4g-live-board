@@ -30,42 +30,41 @@ export default async function handler(req, res) {
       const parts = row.split(",");
 
       // Example:
-      // expressbus,4g,b-a,36541,8002KWZ,Pilaitė,-1,45
+      // expressbus,4g,b-a,36547,8002KWZ,Pilaitė,-1,45
       if (parts.length < 8) continue;
 
       const type = (parts[0] || "").trim().toLowerCase();
       const line = (parts[1] || "").trim().toLowerCase();
+      const direction = (parts[2] || "").trim();
+      const tripId = (parts[3] || "").trim();
+      const vehicle = (parts[4] || "").trim();
       const destination = (parts[5] || "").trim();
-      const minutes = Number((parts[7] || "").trim());
+      const field7 = (parts[6] || "").trim();
+      const field8 = (parts[7] || "").trim();
+      const numericValue = Number(field8);
 
       if (!["bus", "expressbus", "trol"].includes(type)) continue;
       if (line !== lineFilter) continue;
-      if (!Number.isFinite(minutes)) continue;
 
       parsed.push({
+        type,
         line: line.toUpperCase(),
+        direction,
+        tripId,
+        vehicle,
         destination,
-        minutes
+        minutes: Number.isFinite(numericValue) ? numericValue : null,
+        rawField: field8,
+        raw: row
       });
-    }
-
-    const unique = [];
-    const seen = new Set();
-
-    for (const item of parsed.sort((a, b) => a.minutes - b.minutes)) {
-      const key = `${item.line}|${item.destination}|${item.minutes}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        unique.push(item);
-      }
     }
 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.status(200).json({
       stopId,
       lineFilter: lineFilter.toUpperCase(),
-      count: unique.length,
-      departures: unique,
+      count: parsed.length,
+      departures: parsed,
       ok: true,
       preview: rows.slice(0, 10)
     });
