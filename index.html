@@ -13,7 +13,7 @@ body{
   padding:20px;
 }
 .container{
-  max-width:1100px;
+  max-width:1200px;
   margin:auto;
   background:#0b0f14;
   border-radius:20px;
@@ -50,18 +50,30 @@ body{
   color:#cbd5e1;
   font-size:14px;
 }
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+}
 .section{
   padding:20px;
   border-top:1px solid #1f2937;
+}
+.section:nth-child(odd){
+  border-right:1px solid #1f2937;
 }
 .section-title{
   font-size:22px;
   font-weight:800;
   margin-bottom:15px;
 }
+.section-subtitle{
+  font-size:13px;
+  color:#9aa4b2;
+  margin-bottom:14px;
+}
 .table-head,.row{
   display:grid;
-  grid-template-columns:110px 110px 1fr;
+  grid-template-columns:90px 90px 1fr 110px;
   gap:10px;
   align-items:center;
 }
@@ -90,6 +102,15 @@ body{
   font-size:18px;
   font-weight:700;
 }
+.cell-eta{
+  text-align:right;
+  font-weight:700;
+  color:#f8fafc;
+}
+.cell-eta-muted{
+  color:#94a3b8;
+  font-weight:600;
+}
 .empty{
   color:#9aa4b2;
   padding:8px 0;
@@ -100,11 +121,19 @@ body{
   font-size:13px;
   color:#9aa4b2;
 }
+@media (max-width:900px){
+  .grid{
+    grid-template-columns:1fr;
+  }
+  .section:nth-child(odd){
+    border-right:none;
+  }
+}
 @media (max-width:760px){
   .title{font-size:26px;}
   .clock-time{font-size:24px;}
   .table-head,.row{
-    grid-template-columns:80px 80px 1fr;
+    grid-template-columns:72px 72px 1fr 86px;
   }
   .cell-destination{
     font-size:15px;
@@ -125,32 +154,45 @@ body{
 
   <div class="status" id="statusBox">Loading live departures…</div>
 
-  <div class="section">
-    <div class="section-title">Šilo Tiltas → Pilaitė</div>
-    <div class="table-head">
-      <div>Stop</div>
-      <div>Line</div>
-      <div>Destination</div>
+  <div class="grid">
+    <div class="section">
+      <div class="section-title">Towards Pilaitė</div>
+      <div class="section-subtitle">Šilo tiltas (1129) · Europos aikštė (0104)</div>
+      <div class="table-head">
+        <div>Stop</div>
+        <div>Line</div>
+        <div>Destination</div>
+        <div>ETA</div>
+      </div>
+      <div id="rows-pilaite"></div>
     </div>
-    <div id="rows-1129"></div>
-  </div>
 
-  <div class="section">
-    <div class="section-title">Europos Aikštė → Pilaitė</div>
-    <div class="table-head">
-      <div>Stop</div>
-      <div>Line</div>
-      <div>Destination</div>
+    <div class="section">
+      <div class="section-title">Towards Saulėtekis</div>
+      <div class="section-subtitle">Šilo tiltas (1139) · Europos aikštė (0103)</div>
+      <div class="table-head">
+        <div>Stop</div>
+        <div>Line</div>
+        <div>Destination</div>
+        <div>ETA</div>
+      </div>
+      <div id="rows-sauletekis"></div>
     </div>
-    <div id="rows-0104"></div>
   </div>
 
   <div class="footer">
-    Live destination data refresh every 20 seconds.
+    Live 4G data refreshes every 20 seconds. ETA falls back to queue order when the feed does not expose a reliable countdown.
   </div>
 </div>
 
 <script>
+const BOARD_CONFIG = [
+  { stop: "1129", direction: "b-a", bucket: "pilaite", label: "1129" },
+  { stop: "0104", direction: "b-a", bucket: "pilaite", label: "0104" },
+  { stop: "1139", direction: "a-b", bucket: "sauletekis", label: "1139" },
+  { stop: "0103", direction: "a-b", bucket: "sauletekis", label: "0103" }
+];
+
 function updateClock(){
   const now = new Date();
   document.getElementById("clockTime").innerText =
@@ -161,18 +203,27 @@ function updateClock(){
 setInterval(updateClock,1000);
 updateClock();
 
-async function fetchStop(stop){
-  const url = `/api/departures?stop=${stop}&line=4G`;
+async function fetchStop(stop, direction){
+  const url = `/api/departures?stop=${stop}&line=4G&direction=${encodeURIComponent(direction)}`;
   const r = await fetch(url, { cache:"no-store" });
   return await r.json();
 }
 
-function renderRow(stopId, item){
+function renderEta(item){
+  if (typeof item.etaMinutes === "number") {
+    if (item.etaMinutes === 0) return "Due";
+    return `${item.etaMinutes} min`;
+  }
+  return `<span class="cell-eta-muted">#${item.queueIndex}</span>`;
+}
+
+function renderRow(item){
   return `
     <div class="row">
-      <div class="cell-stop">${stopId}</div>
+      <div class="cell-stop">${item.stopLabel}</div>
       <div class="cell-line">${item.line || "4G"}</div>
       <div class="cell-destination">${item.destination || "-"}</div>
+      <div class="cell-eta">${renderEta(item)}</div>
     </div>
   `;
 }
@@ -181,11 +232,11 @@ function renderEmpty(container, text){
   container.innerHTML = `<div class="empty">${text}</div>`;
 }
 
-function uniqueByDestination(items){
+function dedupe(items){
   const seen = new Set();
   const out = [];
   for(const item of items){
-    const key = `${item.line}|${item.destination}`;
+    const key = `${item.stopLabel}|${item.line}|${item.destination}|${item.etaMinutes}|${item.queueIndex}`;
     if(!seen.has(key)){
       seen.add(key);
       out.push(item);
@@ -195,39 +246,61 @@ function uniqueByDestination(items){
 }
 
 async function loadBoard(){
-  const rows1129 = document.getElementById("rows-1129");
-  const rows0104 = document.getElementById("rows-0104");
+  const rowsPilaite = document.getElementById("rows-pilaite");
+  const rowsSauletekis = document.getElementById("rows-sauletekis");
   const statusBox = document.getElementById("statusBox");
 
-  rows1129.innerHTML = "";
-  rows0104.innerHTML = "";
+  rowsPilaite.innerHTML = "";
+  rowsSauletekis.innerHTML = "";
 
-  try{
-    const [data1129, data0104] = await Promise.all([
-      fetchStop("1129"),
-      fetchStop("0104")
-    ]);
+  try {
+    const responses = await Promise.all(
+      BOARD_CONFIG.map(async cfg => {
+        const data = await fetchStop(cfg.stop, cfg.direction);
+        const departures = Array.isArray(data.departures) ? data.departures : [];
+        return departures.map(item => ({
+          ...item,
+          stopLabel: cfg.label,
+          bucket: cfg.bucket
+        }));
+      })
+    );
 
-    const departures1129 = Array.isArray(data1129.departures) ? uniqueByDestination(data1129.departures) : [];
-    const departures0104 = Array.isArray(data0104.departures) ? uniqueByDestination(data0104.departures) : [];
+    const merged = responses.flat();
+    const pilaite = dedupe(merged.filter(x => x.bucket === "pilaite"));
+    const sauletekis = dedupe(merged.filter(x => x.bucket === "sauletekis"));
 
-    if (departures1129.length){
-      rows1129.innerHTML = departures1129.map(item => renderRow("1129", item)).join("");
+    pilaite.sort((a, b) => {
+      if (a.etaMinutes != null && b.etaMinutes != null) return a.etaMinutes - b.etaMinutes;
+      if (a.etaMinutes != null) return -1;
+      if (b.etaMinutes != null) return 1;
+      return a.queueIndex - b.queueIndex;
+    });
+
+    sauletekis.sort((a, b) => {
+      if (a.etaMinutes != null && b.etaMinutes != null) return a.etaMinutes - b.etaMinutes;
+      if (a.etaMinutes != null) return -1;
+      if (b.etaMinutes != null) return 1;
+      return a.queueIndex - b.queueIndex;
+    });
+
+    if (pilaite.length) {
+      rowsPilaite.innerHTML = pilaite.map(renderRow).join("");
     } else {
-      renderEmpty(rows1129, "No live 4G rows found for this stop.");
+      renderEmpty(rowsPilaite, "No live 4G rows found.");
     }
 
-    if (departures0104.length){
-      rows0104.innerHTML = departures0104.map(item => renderRow("0104", item)).join("");
+    if (sauletekis.length) {
+      rowsSauletekis.innerHTML = sauletekis.map(renderRow).join("");
     } else {
-      renderEmpty(rows0104, "No live 4G rows found for this stop.");
+      renderEmpty(rowsSauletekis, "No live 4G rows found.");
     }
 
-    statusBox.innerText = "Live destination data loaded successfully.";
-  } catch (e){
+    statusBox.innerText = "Live 4G departures loaded successfully.";
+  } catch (e) {
     statusBox.innerText = "Could not load live departures.";
-    renderEmpty(rows1129, "No data.");
-    renderEmpty(rows0104, "No data.");
+    renderEmpty(rowsPilaite, "No data.");
+    renderEmpty(rowsSauletekis, "No data.");
     console.error(e);
   }
 }
