@@ -6,127 +6,135 @@
 <title>4G Live Departures Board</title>
 
 <style>
-
 body{
-margin:0;
-font-family:Arial, Helvetica, sans-serif;
-background:#05070b;
-color:white;
-padding:20px;
+  margin:0;
+  font-family:Arial, Helvetica, sans-serif;
+  background:#05070b;
+  color:white;
+  padding:20px;
 }
 
 .container{
-max-width:1100px;
-margin:auto;
-background:#0b0f14;
-border-radius:20px;
-overflow:hidden;
-box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  max-width:1100px;
+  margin:auto;
+  background:#0b0f14;
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,0.5);
 }
 
 .header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:25px;
-background:#0f141b;
-border-bottom:1px solid #1f2937;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:25px;
+  background:#0f141b;
+  border-bottom:1px solid #1f2937;
 }
 
 .title{
-font-size:34px;
-font-weight:800;
+  font-size:34px;
+  font-weight:800;
 }
 
 .clock{
-text-align:right;
+  text-align:right;
 }
 
 .clock-time{
-font-size:32px;
-font-weight:700;
+  font-size:32px;
+  font-weight:700;
 }
 
 .clock-date{
-font-size:14px;
-color:#9aa4b2;
-margin-top:4px;
+  font-size:14px;
+  color:#9aa4b2;
+  margin-top:4px;
+}
+
+.status{
+  padding:14px 20px;
+  border-bottom:1px solid #1f2937;
+  font-size:14px;
+  color:#cbd5e1;
 }
 
 .section{
-padding:20px;
-border-top:1px solid #1f2937;
+  padding:20px;
+  border-top:1px solid #1f2937;
 }
 
 .section-title{
-font-size:22px;
-font-weight:800;
-margin-bottom:15px;
+  font-size:22px;
+  font-weight:800;
+  margin-bottom:15px;
 }
 
 .table-head,
 .row{
-display:grid;
-grid-template-columns:120px 1fr 120px;
-gap:10px;
-align-items:center;
+  display:grid;
+  grid-template-columns:120px 1fr 120px;
+  gap:10px;
+  align-items:center;
 }
 
 .table-head{
-color:#9aa4b2;
-font-size:12px;
-text-transform:uppercase;
-margin-bottom:10px;
+  color:#9aa4b2;
+  font-size:12px;
+  text-transform:uppercase;
+  margin-bottom:10px;
 }
 
 .row{
-padding:12px 0;
-border-top:1px solid rgba(255,255,255,0.05);
+  padding:12px 0;
+  border-top:1px solid rgba(255,255,255,0.05);
 }
 
 .line{
-background:#1f6feb;
-padding:8px;
-border-radius:10px;
-font-weight:700;
-text-align:center;
+  background:#1f6feb;
+  padding:8px;
+  border-radius:10px;
+  font-weight:700;
+  text-align:center;
 }
 
 .destination{
-font-size:18px;
-font-weight:700;
+  font-size:18px;
+  font-weight:700;
 }
 
 .eta{
-text-align:right;
-font-size:18px;
-font-weight:800;
+  text-align:right;
+  font-size:18px;
+  font-weight:800;
+}
+
+.empty{
+  color:#9aa4b2;
+  padding:8px 0;
 }
 
 .footer{
-padding:15px 20px;
-border-top:1px solid #1f2937;
-font-size:13px;
-color:#9aa4b2;
+  padding:15px 20px;
+  border-top:1px solid #1f2937;
+  font-size:13px;
+  color:#9aa4b2;
 }
 
 @media (max-width:760px){
+  .table-head,
+  .row{
+    grid-template-columns:70px 1fr 70px;
+  }
 
-.table-head,
-.row{
-grid-template-columns:70px 1fr 70px;
+  .title{
+    font-size:26px;
+  }
+
+  .clock-time{
+    font-size:24px;
+  }
 }
-
-.title{
-font-size:26px;
-}
-
-.clock-time{
-font-size:24px;
-}
-
-}
-
 </style>
 </head>
 
@@ -134,154 +142,137 @@ font-size:24px;
 
 <div class="container">
 
-<div class="header">
-<div class="title">4G Live Departures Board</div>
+  <div class="header">
+    <div class="title">4G Live Departures Board</div>
 
-<div class="clock">
-<div class="clock-time" id="clockTime">--:--</div>
-<div class="clock-date" id="clockDate">--</div>
-</div>
-</div>
+    <div class="clock">
+      <div class="clock-time" id="clockTime">--:--</div>
+      <div class="clock-date" id="clockDate">--</div>
+    </div>
+  </div>
 
+  <div class="status" id="statusBox">Loading live departures…</div>
 
-<div class="section">
+  <div class="section">
+    <div class="section-title">Šilo Tiltas → Europos Aikštė</div>
 
-<div class="section-title">
-Šilo Tiltas → Europos Aikštė
-</div>
+    <div class="table-head">
+      <div>Line</div>
+      <div>Destination</div>
+      <div>Arrival</div>
+    </div>
 
-<div class="table-head">
-<div>Line</div>
-<div>Destination</div>
-<div>Arrival</div>
-</div>
+    <div id="rows-silo"></div>
+  </div>
 
-<div id="rows-silo"></div>
+  <div class="section">
+    <div class="section-title">Europos Aikštė → Šilo Tiltas</div>
 
-</div>
+    <div class="table-head">
+      <div>Line</div>
+      <div>Destination</div>
+      <div>Arrival</div>
+    </div>
 
+    <div id="rows-europa"></div>
+  </div>
 
-<div class="section">
-
-<div class="section-title">
-Europos Aikštė → Šilo Tiltas
-</div>
-
-<div class="table-head">
-<div>Line</div>
-<div>Destination</div>
-<div>Arrival</div>
-</div>
-
-<div id="rows-europa"></div>
+  <div class="footer">
+    Live data refresh every 20 seconds
+  </div>
 
 </div>
-
-<div class="footer">
-Live data refresh every 20 seconds
-</div>
-
-</div>
-
 
 <script>
-
 function updateClock(){
+  const now = new Date();
 
-const now = new Date()
+  document.getElementById("clockTime").innerText =
+    now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
 
-document.getElementById("clockTime").innerText =
-now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})
-
-document.getElementById("clockDate").innerText =
-now.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})
-
+  document.getElementById("clockDate").innerText =
+    now.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
 }
 
-setInterval(updateClock,1000)
-updateClock()
+setInterval(updateClock,1000);
+updateClock();
 
-
-const STOP_SILO = ["1139","1129"]
-const STOP_EUROPA = ["0104"]
+const STOP_SILO = ["1139","1129"];
+const STOP_EUROPA = ["0104"];
 
 async function fetchStop(stop){
-
-let url=`/api/departures?stop=${stop}`
-
-let r = await fetch(url)
-
-let text = await r.text()
-
-return text
-
+  const url = `/api/departures?stop=${stop}`;
+  const r = await fetch(url, { cache: "no-store" });
+  return await r.json();
 }
 
-function renderRow(destination,minutes){
+function renderRow(destination, minutes){
+  return `
+    <div class="row">
+      <div class="line">4G</div>
+      <div class="destination">${destination}</div>
+      <div class="eta">${minutes === 0 ? "Now" : minutes + " min"}</div>
+    </div>
+  `;
+}
 
-return `
-<div class="row">
-<div class="line">4G</div>
-<div class="destination">${destination}</div>
-<div class="eta">${minutes==0?"Now":minutes+" min"}</div>
-</div>
-`
-
+function renderEmpty(container, text){
+  container.innerHTML = `<div class="empty">${text}</div>`;
 }
 
 async function loadBoard(){
+  const siloContainer = document.getElementById("rows-silo");
+  const europaContainer = document.getElementById("rows-europa");
+  const statusBox = document.getElementById("statusBox");
 
-let siloContainer=document.getElementById("rows-silo")
-let europaContainer=document.getElementById("rows-europa")
+  siloContainer.innerHTML = "";
+  europaContainer.innerHTML = "";
 
-siloContainer.innerHTML=""
-europaContainer.innerHTML=""
+  try{
+    let siloMinutes = [];
+    let europaMinutes = [];
 
-try{
+    for (const stop of STOP_SILO){
+      const data = await fetchStop(stop);
+      if (data.ok && Array.isArray(data.minutes)) {
+        siloMinutes = siloMinutes.concat(data.minutes);
+      }
+    }
 
-for(let stop of STOP_SILO){
+    for (const stop of STOP_EUROPA){
+      const data = await fetchStop(stop);
+      if (data.ok && Array.isArray(data.minutes)) {
+        europaMinutes = europaMinutes.concat(data.minutes);
+      }
+    }
 
-let html=await fetchStop(stop)
+    siloMinutes = [...new Set(siloMinutes)].sort((a,b)=>a-b).slice(0,4);
+    europaMinutes = [...new Set(europaMinutes)].sort((a,b)=>a-b).slice(0,4);
 
-let matches=[...html.matchAll(/4G.*?(\\d+)\\s*min/gi)]
+    if (siloMinutes.length) {
+      siloContainer.innerHTML = siloMinutes.map(m => renderRow("Europos Aikštė", m)).join("");
+    } else {
+      renderEmpty(siloContainer, "No live 4G departures found for this direction.");
+    }
 
-matches.slice(0,4).forEach(m=>{
+    if (europaMinutes.length) {
+      europaContainer.innerHTML = europaMinutes.map(m => renderRow("Šilo Tiltas", m)).join("");
+    } else {
+      renderEmpty(europaContainer, "No live 4G departures found for this direction.");
+    }
 
-let minutes=m[1]
-
-siloContainer.innerHTML+=renderRow("Europos Aikštė",minutes)
-
-})
-
+    statusBox.innerText = "Live departures loaded successfully.";
+  }
+  catch(e){
+    statusBox.innerText = "Live departures could not be loaded. Check that Vercel deployed both index.html and api/departures.js.";
+    renderEmpty(siloContainer, "No live data.");
+    renderEmpty(europaContainer, "No live data.");
+    console.error(e);
+  }
 }
 
-for(let stop of STOP_EUROPA){
-
-let html=await fetchStop(stop)
-
-let matches=[...html.matchAll(/4G.*?(\\d+)\\s*min/gi)]
-
-matches.slice(0,4).forEach(m=>{
-
-let minutes=m[1]
-
-europaContainer.innerHTML+=renderRow("Šilo Tiltas",minutes)
-
-})
-
-}
-
-}catch(e){
-
-console.log("Live data loading issue")
-
-}
-
-}
-
-loadBoard()
-setInterval(loadBoard,20000)
-
+loadBoard();
+setInterval(loadBoard, 20000);
 </script>
 
 </body>
