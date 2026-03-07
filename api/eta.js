@@ -136,7 +136,7 @@ async function loadStaticGtfs() {
   const targetRouteIds = new Set(
     routes
       .filter(r => String(r.route_short_name || "").trim().toLowerCase() === ROUTE_SHORT_NAME.toLowerCase())
-      .map(r => String(r.route_id))
+      .map(r => String(r.route_id || "").trim())
   );
 
   if (!targetRouteIds.size) {
@@ -145,38 +145,47 @@ async function loadStaticGtfs() {
 
   const tripsById = new Map();
   for (const trip of trips) {
-    if (!targetRouteIds.has(String(trip.route_id))) continue;
-    tripsById.set(String(trip.trip_id), {
-      tripId: String(trip.trip_id),
-      routeId: String(trip.route_id),
+    const routeId = String(trip.route_id || "").trim();
+    const tripId = String(trip.trip_id || "").trim();
+    if (!targetRouteIds.has(routeId) || !tripId) continue;
+
+    tripsById.set(tripId, {
+      tripId,
+      routeId,
       headsign: String(trip.trip_headsign || "").trim(),
       directionId: String(trip.direction_id || "").trim()
     });
   }
 
   const stopTimesByTrip = new Map();
+
   for (const st of stopTimes) {
-    const tripId = String(st.trip_id || "");
+    const tripId = String(st.trip_id || "").trim();
     if (!tripsById.has(tripId)) continue;
+
+    const stopId = String(st.stop_id || "").trim();
+    const sequence = Number(st.stop_sequence);
+
+    if (!stopId || !Number.isFinite(sequence)) continue;
 
     if (!stopTimesByTrip.has(tripId)) {
       stopTimesByTrip.set(tripId, []);
     }
 
     stopTimesByTrip.get(tripId).push({
-      stopId: String(st.stop_id || "").trim(),
-      sequence: Number(st.stop_sequence)
+      stopId,
+      sequence
     });
   }
 
-  for (const [tripId, list] of stopTimesByTrip.entries()) {
+  for (const [, list] of stopTimesByTrip.entries()) {
     list.sort((a, b) => a.sequence - b.sequence);
   }
 
   const corridorTripIndex = new Map();
 
   for (const corridor of CORRIDORS) {
-    corridorTripIndex.set(corridor.id, new Set());
+    corridorTripIndex.set(corridor.id, new Map());
   }
 
   for (const [tripId, stops] of stopTimesByTrip.entries()) {
@@ -187,7 +196,12 @@ async function loadStaticGtfs() {
       if (!origin || !destination) continue;
       if (origin.sequence >= destination.sequence) continue;
 
-      corridorTripIndex.get(corridor.id).add(tripId);
+      corridorTripIndex.get(corridor.id).set(tripId, {
+        originStopId: corridor.originStopId,
+        destinationStopId: corridor.destinationStopId,
+        originSequence: origin.sequence,
+        destinationSequence: destination.sequence
+      });
     }
   }
 
@@ -218,6 +232,25 @@ function minutesFromNow(timestampSec, nowSec) {
   return Math.max(0, Math.ceil((timestampSec - nowSec) / 60));
 }
 
+function findStopUpdate(updates, stopId, stopSequence) {
+  if (!Array.isArray(updates) || !updates.length) return null;
+
+  // First try exact stop_id match
+  const byStopId = updates.find(
+    u => String(u.stopId || "").trim() === String(stopId || "").trim()
+  );
+  if (byStopId) return byStopId;
+
+  // Then try exact stop_sequence match
+  const bySequence = updates.find(u => {
+    const seq = Number(u.stopSequence);
+    return Number.isFinite(seq) && seq === Number(stopSequence);
+  });
+  if (bySequence) return bySequence;
+
+  return null;
+}
+
 async function loadRealtimeEta() {
   const staticData = await loadStaticGtfs();
   const nowSec = Math.floor(Date.now() / 1000);
@@ -240,18 +273,22 @@ async function loadRealtimeEta() {
     const tripMeta = staticData.tripsById.get(tripId);
     if (!tripMeta) continue;
 
+    const updates = Array.isArray(tripUpdate.stopTimeUpdate) ? tripUpdate.stopTimeUpdate : [];
+
     for (const corridor of CORRIDORS) {
-      const allowedTrips = staticData.corridorTripIndex.get(corridor.id);
-      if (!allowedTrips || !allowedTrips.has(tripId)) continue;
+      const corridorInfo = staticData.corridorTripIndex.get(corridor.id)?.get(tripId);
+      if (!corridorInfo) continue;
 
-      const updates = Array.isArray(tripUpdate.stopTimeUpdate) ? tripUpdate.stopTimeUpdate : [];
-
-      const originUpdate = updates.find(
-        u => String(u.stopId || "").trim() === corridor.originStopId
+      const originUpdate = findStopUpdate(
+        updates,
+        corridorInfo.originStopId,
+        corridorInfo.originSequence
       );
 
-      const destinationUpdate = updates.find(
-        u => String(u.stopId || "").trim() === corridor.destinationStopId
+      const destinationUpdate = findStopUpdate(
+        updates,
+        corridorInfo.destinationStopId,
+        corridorInfo.destinationSequence
       );
 
       const originTs = getStopUpdateTime(originUpdate);
@@ -263,8 +300,10 @@ async function loadRealtimeEta() {
         tripId,
         headsign: tripMeta.headsign || null,
         vehicleId: tripUpdate.vehicle?.id ? String(tripUpdate.vehicle.id) : null,
-        originStopId: corridor.originStopId,
-        destinationStopId: corridor.destinationStopId,
+        originStopId: corridorInfo.originStopId,
+        destinationStopId: corridorInfo.destinationStopId,
+        originSequence: corridorInfo.originSequence,
+        destinationSequence: corridorInfo.destinationSequence,
         originTimestamp: originTs,
         destinationTimestamp: destinationTs || null,
         originEtaMin: minutesFromNow(originTs, nowSec),
