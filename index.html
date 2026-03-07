@@ -3,8 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>4G Live Departures Board</title>
-
+<title>4G Debug Board</title>
 <style>
 body{
   margin:0;
@@ -13,16 +12,14 @@ body{
   color:white;
   padding:20px;
 }
-
 .container{
-  max-width:1100px;
+  max-width:1200px;
   margin:auto;
   background:#0b0f14;
   border-radius:20px;
   overflow:hidden;
   box-shadow:0 20px 60px rgba(0,0,0,0.5);
 }
-
 .header{
   display:flex;
   justify-content:space-between;
@@ -31,187 +28,171 @@ body{
   background:#0f141b;
   border-bottom:1px solid #1f2937;
 }
-
 .title{
   font-size:34px;
   font-weight:800;
 }
-
 .clock{
   text-align:right;
 }
-
 .clock-time{
   font-size:32px;
   font-weight:700;
 }
-
 .clock-date{
   font-size:14px;
   color:#9aa4b2;
   margin-top:4px;
 }
-
 .status{
   padding:14px 20px;
   border-bottom:1px solid #1f2937;
-  font-size:14px;
   color:#cbd5e1;
+  font-size:14px;
 }
-
 .section{
   padding:20px;
   border-top:1px solid #1f2937;
 }
-
 .section-title{
   font-size:22px;
   font-weight:800;
   margin-bottom:15px;
 }
-
-.table-head,
-.row{
+.table-head,.row{
   display:grid;
-  grid-template-columns:120px 1fr 120px;
+  grid-template-columns:100px 90px 1fr 110px 90px;
   gap:10px;
   align-items:center;
 }
-
 .table-head{
   color:#9aa4b2;
   font-size:12px;
   text-transform:uppercase;
   margin-bottom:10px;
 }
-
 .row{
   padding:12px 0;
   border-top:1px solid rgba(255,255,255,0.05);
 }
-
-.line{
+.cell-stop{
+  color:#cbd5e1;
+  font-weight:700;
+}
+.cell-line{
   background:#1f6feb;
   padding:8px;
   border-radius:10px;
   font-weight:700;
   text-align:center;
 }
-
-.destination{
+.cell-destination{
   font-size:18px;
   font-weight:700;
 }
-
-.eta{
+.cell-minutes{
   text-align:right;
   font-size:18px;
   font-weight:800;
 }
-
+.cell-raw{
+  text-align:right;
+  color:#9aa4b2;
+  font-size:14px;
+}
 .empty{
   color:#9aa4b2;
   padding:8px 0;
 }
-
 .footer{
   padding:15px 20px;
   border-top:1px solid #1f2937;
   font-size:13px;
   color:#9aa4b2;
 }
-
 @media (max-width:760px){
-  .table-head,
-  .row{
-    grid-template-columns:70px 1fr 70px;
+  .title{font-size:26px;}
+  .clock-time{font-size:24px;}
+  .table-head,.row{
+    grid-template-columns:70px 70px 1fr 70px 60px;
+    font-size:11px;
   }
-
-  .title{
-    font-size:26px;
-  }
-
-  .clock-time{
-    font-size:24px;
+  .cell-destination{
+    font-size:15px;
   }
 }
 </style>
 </head>
-
 <body>
 
 <div class="container">
-
   <div class="header">
-    <div class="title">4G Live Departures Board</div>
-
+    <div class="title">4G Debug Board</div>
     <div class="clock">
       <div class="clock-time" id="clockTime">--:--</div>
       <div class="clock-date" id="clockDate">--</div>
     </div>
   </div>
 
-  <div class="status" id="statusBox">Loading live departures…</div>
+  <div class="status" id="statusBox">Loading live debug data…</div>
 
   <div class="section">
-    <div class="section-title">Šilo Tiltas → Europos Aikštė</div>
-
+    <div class="section-title">Debug Section A — Stop 1129</div>
     <div class="table-head">
+      <div>Stop</div>
       <div>Line</div>
       <div>Destination</div>
-      <div>Arrival</div>
+      <div>Value</div>
+      <div>Raw</div>
     </div>
-
-    <div id="rows-silo"></div>
+    <div id="rows-1129"></div>
   </div>
 
   <div class="section">
-    <div class="section-title">Europos Aikštė → Šilo Tiltas</div>
-
+    <div class="section-title">Debug Section B — Stop 0104</div>
     <div class="table-head">
+      <div>Stop</div>
       <div>Line</div>
       <div>Destination</div>
-      <div>Arrival</div>
+      <div>Value</div>
+      <div>Raw</div>
     </div>
-
-    <div id="rows-europa"></div>
+    <div id="rows-0104"></div>
   </div>
 
   <div class="footer">
-    Live data refresh every 20 seconds
+    This debug version shows the exact 4G records returned by your Vercel API. Refresh every 20 seconds.
   </div>
-
 </div>
 
 <script>
 function updateClock(){
   const now = new Date();
-
   document.getElementById("clockTime").innerText =
     now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
-
   document.getElementById("clockDate").innerText =
     now.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
 }
-
 setInterval(updateClock,1000);
 updateClock();
 
-const STOP_SILO = ["1139","1129"];
-const STOP_EUROPA = ["0104"];
-
 async function fetchStop(stop){
-  const url = `/api/departures?stop=${stop}`;
-  const r = await fetch(url, { cache: "no-store" });
+  const url = `/api/departures?stop=${stop}&line=4G`;
+  const r = await fetch(url, { cache:"no-store" });
   return await r.json();
 }
 
-function renderRow(destination, minutes){
+function renderRow(stopId, item){
+  const valueText = Number.isFinite(item.minutes) ? item.minutes : "-";
+  const rawText = item.rawField ?? "-";
+
   return `
     <div class="row">
-      <div class="line">4G</div>
-      <div class="destination">${destination}</div>
-      <div class="eta">${minutes === 0 ? "Now" : minutes + " min"}</div>
+      <div class="cell-stop">${stopId}</div>
+      <div class="cell-line">${item.line || "4G"}</div>
+      <div class="cell-destination">${item.destination || "-"}</div>
+      <div class="cell-minutes">${valueText}</div>
+      <div class="cell-raw">${rawText}</div>
     </div>
   `;
 }
@@ -221,52 +202,36 @@ function renderEmpty(container, text){
 }
 
 async function loadBoard(){
-  const siloContainer = document.getElementById("rows-silo");
-  const europaContainer = document.getElementById("rows-europa");
+  const rows1129 = document.getElementById("rows-1129");
+  const rows0104 = document.getElementById("rows-0104");
   const statusBox = document.getElementById("statusBox");
 
-  siloContainer.innerHTML = "";
-  europaContainer.innerHTML = "";
+  rows1129.innerHTML = "";
+  rows0104.innerHTML = "";
 
   try{
-    let siloMinutes = [];
-    let europaMinutes = [];
+    const [data1129, data0104] = await Promise.all([
+      fetchStop("1129"),
+      fetchStop("0104")
+    ]);
 
-    for (const stop of STOP_SILO){
-      const data = await fetchStop(stop);
-      if (data.ok && Array.isArray(data.minutes)) {
-        siloMinutes = siloMinutes.concat(data.minutes);
-      }
-    }
-
-    for (const stop of STOP_EUROPA){
-      const data = await fetchStop(stop);
-      if (data.ok && Array.isArray(data.minutes)) {
-        europaMinutes = europaMinutes.concat(data.minutes);
-      }
-    }
-
-    siloMinutes = [...new Set(siloMinutes)].sort((a,b)=>a-b).slice(0,4);
-    europaMinutes = [...new Set(europaMinutes)].sort((a,b)=>a-b).slice(0,4);
-
-    if (siloMinutes.length) {
-      siloContainer.innerHTML = siloMinutes.map(m => renderRow("Europos Aikštė", m)).join("");
+    if (data1129.ok && Array.isArray(data1129.departures) && data1129.departures.length){
+      rows1129.innerHTML = data1129.departures.map(item => renderRow("1129", item)).join("");
     } else {
-      renderEmpty(siloContainer, "No live 4G departures found for this direction.");
+      renderEmpty(rows1129, "No 4G rows found for stop 1129.");
     }
 
-    if (europaMinutes.length) {
-      europaContainer.innerHTML = europaMinutes.map(m => renderRow("Šilo Tiltas", m)).join("");
+    if (data0104.ok && Array.isArray(data0104.departures) && data0104.departures.length){
+      rows0104.innerHTML = data0104.departures.map(item => renderRow("0104", item)).join("");
     } else {
-      renderEmpty(europaContainer, "No live 4G departures found for this direction.");
+      renderEmpty(rows0104, "No 4G rows found for stop 0104.");
     }
 
-    statusBox.innerText = "Live departures loaded successfully.";
-  }
-  catch(e){
-    statusBox.innerText = "Live departures could not be loaded. Check that Vercel deployed both index.html and api/departures.js.";
-    renderEmpty(siloContainer, "No live data.");
-    renderEmpty(europaContainer, "No live data.");
+    statusBox.innerText = "Debug data loaded. Check destinations and values for each stop.";
+  } catch (e){
+    statusBox.innerText = "Could not load debug data.";
+    renderEmpty(rows1129, "No data.");
+    renderEmpty(rows0104, "No data.");
     console.error(e);
   }
 }
