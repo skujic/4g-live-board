@@ -23,17 +23,54 @@ body{
 .header{
   display:flex;
   justify-content:space-between;
-  align-items:center;
+  align-items:flex-start;
+  gap:20px;
   padding:25px;
   background:#0f141b;
   border-bottom:1px solid #1f2937;
 }
+.header-left{
+  flex:1;
+}
 .title{
   font-size:34px;
   font-weight:800;
+  margin-bottom:12px;
+}
+.toolbar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.btn{
+  border:none;
+  background:#1f6feb;
+  color:#fff;
+  padding:10px 14px;
+  border-radius:12px;
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+}
+.btn:hover{
+  filter:brightness(1.08);
+}
+.btn-secondary{
+  background:#1b2430;
+  color:#dbe5f1;
+  border:1px solid #2b3646;
+}
+.btn-success{
+  background:#15803d;
+}
+.header-right{
+  display:flex;
+  align-items:flex-start;
+  gap:18px;
 }
 .clock{
   text-align:right;
+  min-width:170px;
 }
 .clock-time{
   font-size:32px;
@@ -43,6 +80,26 @@ body{
   font-size:14px;
   color:#9aa4b2;
   margin-top:4px;
+}
+.qr-box{
+  background:#0b0f14;
+  border:1px solid #1f2937;
+  border-radius:16px;
+  padding:10px;
+  text-align:center;
+  min-width:132px;
+}
+.qr-title{
+  font-size:12px;
+  color:#9aa4b2;
+  margin-bottom:8px;
+}
+.qr-box img{
+  width:110px;
+  height:110px;
+  border-radius:10px;
+  background:#fff;
+  display:block;
 }
 .status{
   padding:14px 20px;
@@ -114,6 +171,10 @@ body{
   margin-left:8px;
   vertical-align:middle;
 }
+.badge-alert{
+  background:rgba(21,128,61,0.2);
+  color:#9ef0b3;
+}
 .muted{
   color:#94a3b8;
   font-weight:600;
@@ -127,6 +188,15 @@ body{
   border-top:1px solid #1f2937;
   font-size:13px;
   color:#9aa4b2;
+}
+@media (max-width:1080px){
+  .header{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .header-right{
+    justify-content:space-between;
+  }
 }
 @media (max-width:980px){
   .grid{
@@ -146,12 +216,24 @@ body{
   .clock-time{
     font-size:24px;
   }
+  .header-right{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+  .clock{
+    text-align:left;
+    min-width:unset;
+  }
   .table-head,.row{
     grid-template-columns:70px 110px 110px 90px 1fr;
     gap:8px;
   }
   .cell-eta{
     font-size:16px;
+  }
+  .qr-box img{
+    width:96px;
+    height:96px;
   }
 }
 </style>
@@ -160,10 +242,24 @@ body{
 
 <div class="container">
   <div class="header">
-    <div class="title">4G Live ETA Board</div>
-    <div class="clock">
-      <div class="clock-time" id="clockTime">--:--</div>
-      <div class="clock-date" id="clockDate">--</div>
+    <div class="header-left">
+      <div class="title">4G Live ETA Board</div>
+      <div class="toolbar">
+        <button class="btn" id="refreshBtn" type="button">Refresh now</button>
+        <button class="btn btn-secondary" id="alertBtn" type="button">Enable 4-min alert</button>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="clock">
+        <div class="clock-time" id="clockTime">--:--</div>
+        <div class="clock-date" id="clockDate">--</div>
+      </div>
+
+      <div class="qr-box">
+        <div class="qr-title">Open on mobile</div>
+        <img id="qrImage" alt="QR code for mobile version" />
+      </div>
     </div>
   </div>
 
@@ -174,6 +270,7 @@ body{
       <div class="section-title">
         Šilo tiltas → Europos aikštė
         <span class="badge">Estimated</span>
+        <span class="badge badge-alert" id="alertBadge1">Alert off</span>
       </div>
       <div class="section-subtitle">4G · next up to 3 arrivals · 1129 → 0104</div>
       <div class="table-head">
@@ -190,6 +287,7 @@ body{
       <div class="section-title">
         Europos aikštė → Šilo tiltas
         <span class="badge">Estimated</span>
+        <span class="badge badge-alert" id="alertBadge2">Alert off</span>
       </div>
       <div class="section-subtitle">4G · next up to 3 arrivals · 0103 → 1139</div>
       <div class="table-head">
@@ -204,11 +302,16 @@ body{
   </div>
 
   <div class="footer">
-    ETA is estimated from GTFS realtime vehicle positions and refreshes every 20 seconds.
+    ETA is estimated from GTFS realtime vehicle positions and refreshes every 20 seconds. The 4-minute sound alert works after you click Enable 4-min alert and keep the page open.
   </div>
 </div>
 
 <script>
+let isLoading = false;
+let alertsEnabled = false;
+let audioContext = null;
+const alertedTrips = new Set();
+
 function updateClock(){
   const now = new Date();
   document.getElementById("clockTime").innerText =
@@ -223,6 +326,19 @@ function updateClock(){
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+function buildQrCode(){
+  const mobileUrl = window.location.href.split("#")[0];
+  const qrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(mobileUrl)}&size=220`;
+  document.getElementById("qrImage").src = qrUrl;
+}
+buildQrCode();
+
+function updateAlertBadges(){
+  const text = alertsEnabled ? "Alert on" : "Alert off";
+  document.getElementById("alertBadge1").innerText = text;
+  document.getElementById("alertBadge2").innerText = text;
+}
 
 function formatEta(minutes){
   if (minutes === null || minutes === undefined) {
@@ -267,12 +383,85 @@ function sanitizeArrivals(arrivals){
     .slice(0, 3);
 }
 
-async function loadBoard(){
+function getAlertKey(corridorId, item){
+  return `${corridorId}|${item.tripId}|${item.vehicleId || ""}`;
+}
+
+async function initAudio(){
+  if (!audioContext) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      throw new Error("Web Audio is not supported in this browser.");
+    }
+    audioContext = new AudioCtx();
+  }
+
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+}
+
+function playBeep(){
+  if (!audioContext) return;
+
+  const now = audioContext.currentTime;
+
+  for (let i = 0; i < 2; i++) {
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    osc.type = "sine";
+    osc.frequency.value = i === 0 ? 880 : 660;
+
+    gain.gain.setValueAtTime(0.0001, now + i * 0.32);
+    gain.gain.exponentialRampToValueAtTime(0.2, now + i * 0.32 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.32 + 0.22);
+
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+
+    osc.start(now + i * 0.32);
+    osc.stop(now + i * 0.32 + 0.24);
+  }
+}
+
+function handleAlerts(corridorId, arrivals){
+  if (!alertsEnabled) return;
+
+  const newlyTriggered = arrivals.filter(item => {
+    if (item.originEtaMin !== 4) return false;
+    const key = getAlertKey(corridorId, item);
+    if (alertedTrips.has(key)) return false;
+    alertedTrips.add(key);
+    return true;
+  });
+
+  if (!newlyTriggered.length) return;
+
+  playBeep();
+
+  const first = newlyTriggered[0];
+  const directionLabel = corridorId === "pilaite"
+    ? "Šilo tiltas → Europos aikštė"
+    : "Europos aikštė → Šilo tiltas";
+
+  document.getElementById("statusBox").innerText =
+    `4-minute alert: 4G vehicle ${first.vehicleId || "—"} is about 4 minutes away on ${directionLabel}.`;
+}
+
+async function loadBoard(forceMessage = false){
+  if (isLoading) return;
+  isLoading = true;
+
   const rowsPilaite = document.getElementById("rows-pilaite");
   const rowsSauletekis = document.getElementById("rows-sauletekis");
   const statusBox = document.getElementById("statusBox");
+  const refreshBtn = document.getElementById("refreshBtn");
 
   try {
+    refreshBtn.disabled = true;
+    refreshBtn.innerText = "Refreshing…";
+
     const response = await fetch(`/api/eta?t=${Date.now()}`, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`ETA request failed with status ${response.status}`);
@@ -302,26 +491,67 @@ async function loadBoard(){
       renderEmpty(rowsSauletekis, "No live estimated 4G arrivals found right now.");
     }
 
+    handleAlerts("pilaite", pilaiteArrivals);
+    handleAlerts("sauletekis", sauletekisArrivals);
+
     const totalRows = pilaiteArrivals.length + sauletekisArrivals.length;
     const updatedAt = new Date().toLocaleTimeString("en-GB", {
       hour: "2-digit",
       minute: "2-digit"
     });
 
-    statusBox.innerText = totalRows
-      ? `Live ETA loaded successfully. ${totalRows} active arrival${totalRows === 1 ? "" : "s"} found. Updated ${updatedAt}.`
-      : `Live ETA loaded. No active estimated arrivals found right now. Updated ${updatedAt}.`;
+    if (forceMessage) {
+      statusBox.innerText = `Manual refresh complete. ${totalRows} active arrival${totalRows === 1 ? "" : "s"} found. Updated ${updatedAt}.`;
+    } else {
+      statusBox.innerText = totalRows
+        ? `Live ETA loaded successfully. ${totalRows} active arrival${totalRows === 1 ? "" : "s"} found. Updated ${updatedAt}.`
+        : `Live ETA loaded. No active estimated arrivals found right now. Updated ${updatedAt}.`;
+    }
 
   } catch (err) {
     statusBox.innerText = "Could not load live ETA.";
     renderEmpty(rowsPilaite, "No data.");
     renderEmpty(rowsSauletekis, "No data.");
     console.error(err);
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.innerText = "Refresh now";
+    isLoading = false;
   }
 }
 
+document.getElementById("refreshBtn").addEventListener("click", () => {
+  loadBoard(true);
+});
+
+document.getElementById("alertBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("alertBtn");
+
+  try {
+    await initAudio();
+    alertsEnabled = !alertsEnabled;
+
+    if (alertsEnabled) {
+      playBeep();
+      btn.innerText = "Disable 4-min alert";
+      btn.classList.remove("btn-secondary");
+      btn.classList.add("btn-success");
+    } else {
+      btn.innerText = "Enable 4-min alert";
+      btn.classList.remove("btn-success");
+      btn.classList.add("btn-secondary");
+    }
+
+    updateAlertBadges();
+  } catch (err) {
+    alert("Sound alert could not be enabled in this browser.");
+    console.error(err);
+  }
+});
+
+updateAlertBadges();
 loadBoard();
-setInterval(loadBoard, 20000);
+setInterval(() => loadBoard(false), 20000);
 </script>
 
 </body>
