@@ -28,9 +28,6 @@ export default async function handler(req, res) {
 
     for (const row of rows) {
       const parts = row.split(",");
-
-      // Example:
-      // expressbus,4g,b-a,36547,8002KWZ,Pilaitė,-1,45
       if (parts.length < 8) continue;
 
       const type = (parts[0] || "").trim().toLowerCase();
@@ -41,7 +38,6 @@ export default async function handler(req, res) {
       const destination = (parts[5] || "").trim();
       const field7 = (parts[6] || "").trim();
       const field8 = (parts[7] || "").trim();
-      const numericValue = Number(field8);
 
       if (!["bus", "expressbus", "trol"].includes(type)) continue;
       if (line !== lineFilter) continue;
@@ -53,8 +49,8 @@ export default async function handler(req, res) {
         tripId,
         vehicle,
         destination,
-        minutes: Number.isFinite(numericValue) ? numericValue : null,
-        rawField: field8,
+        rawField7: field7,
+        rawField8: field8,
         raw: row
       });
     }
