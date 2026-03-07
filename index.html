@@ -1,669 +1,289 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>4G Live Departures Board</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #05070b;
-      --panel: #0d1117;
-      --line: #1f6feb;
-      --text: #f8fafc;
-      --muted: #9aa4b2;
-      --border: #1f2937;
-      --ok: #22c55e;
-      --danger: #ef4444;
-      --card: #0b0f14;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>4G Live Departures Board</title>
 
-    * { box-sizing: border-box; }
+<style>
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Inter, Arial, sans-serif;
-      padding: 20px;
-    }
+body{
+margin:0;
+font-family:Arial, Helvetica, sans-serif;
+background:#05070b;
+color:white;
+padding:20px;
+}
 
-    .page {
-      width: min(1180px, 100%);
-      margin: 0 auto;
-      display: grid;
-      gap: 24px;
-    }
+.container{
+max-width:1100px;
+margin:auto;
+background:#0b0f14;
+border-radius:20px;
+overflow:hidden;
+box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
 
-    .board {
-      background: linear-gradient(180deg, #0b0f14 0%, #090c10 100%);
-      border: 1px solid var(--border);
-      border-radius: 28px;
-      overflow: hidden;
-      box-shadow: 0 30px 80px rgba(0,0,0,.45);
-    }
+.header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:25px;
+background:#0f141b;
+border-bottom:1px solid #1f2937;
+}
 
-    .page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 20px;
-      padding: 28px 32px;
-      border-bottom: 1px solid var(--border);
-      background: #0f141b;
-    }
+.title{
+font-size:34px;
+font-weight:800;
+}
 
-    .main-title {
-      font-size: clamp(30px, 5vw, 52px);
-      font-weight: 800;
-      letter-spacing: .02em;
-      margin: 0;
-    }
+.clock{
+text-align:right;
+}
 
-    .clock {
-      text-align: right;
-      min-width: 180px;
-    }
+.clock-time{
+font-size:32px;
+font-weight:700;
+}
 
-    .clock-time {
-      font-size: clamp(28px, 5vw, 48px);
-      font-weight: 800;
-      line-height: 1;
-    }
+.clock-date{
+font-size:14px;
+color:#9aa4b2;
+margin-top:4px;
+}
 
-    .clock-date {
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 16px;
-      min-height: 24px;
-    }
+.section{
+padding:20px;
+border-top:1px solid #1f2937;
+}
 
-    .section {
-      border-top: 1px solid var(--border);
-    }
+.section-title{
+font-size:22px;
+font-weight:800;
+margin-bottom:15px;
+}
 
-    .section:first-of-type {
-      border-top: 0;
-    }
+.table-head,
+.row{
+display:grid;
+grid-template-columns:120px 1fr 120px;
+gap:10px;
+align-items:center;
+}
 
-    .section-title {
-      padding: 18px 32px 14px;
-      font-size: clamp(20px, 3vw, 30px);
-      font-weight: 800;
-      border-bottom: 1px solid var(--border);
-      background: rgba(255,255,255,.02);
-    }
+.table-head{
+color:#9aa4b2;
+font-size:12px;
+text-transform:uppercase;
+margin-bottom:10px;
+}
 
-    .table-head,
-    .row {
-      display: grid;
-      grid-template-columns: 160px 1fr 180px;
-      gap: 18px;
-      align-items: center;
-    }
+.row{
+padding:12px 0;
+border-top:1px solid rgba(255,255,255,0.05);
+}
 
-    .table-head {
-      padding: 14px 32px;
-      color: var(--muted);
-      font-size: 15px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      border-bottom: 1px solid var(--border);
-    }
+.line{
+background:#1f6feb;
+padding:8px;
+border-radius:10px;
+font-weight:700;
+text-align:center;
+}
 
-    .rows {
-      padding: 8px 0;
-    }
+.destination{
+font-size:18px;
+font-weight:700;
+}
 
-    .row {
-      padding: 20px 32px;
-      border-bottom: 1px solid rgba(255,255,255,.05);
-      min-height: 108px;
-    }
+.eta{
+text-align:right;
+font-size:18px;
+font-weight:800;
+}
 
-    .row:last-child {
-      border-bottom: 0;
-    }
+.footer{
+padding:15px 20px;
+border-top:1px solid #1f2937;
+font-size:13px;
+color:#9aa4b2;
+}
 
-    .line-pill {
-      width: 108px;
-      height: 64px;
-      border-radius: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--line);
-      color: white;
-      font-size: 34px;
-      font-weight: 900;
-      letter-spacing: .03em;
-    }
+@media (max-width:760px){
 
-    .destination {
-      font-size: clamp(24px, 4vw, 38px);
-      font-weight: 800;
-      line-height: 1.1;
-    }
+.table-head,
+.row{
+grid-template-columns:70px 1fr 70px;
+}
 
-    .meta {
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 16px;
-    }
+.title{
+font-size:26px;
+}
 
-    .eta {
-      text-align: right;
-      font-size: clamp(28px, 5vw, 44px);
-      font-weight: 900;
-      line-height: 1;
-    }
+.clock-time{
+font-size:24px;
+}
 
-    .eta small {
-      display: block;
-      margin-top: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--muted);
-      letter-spacing: .06em;
-      text-transform: uppercase;
-    }
+}
 
-    .empty,
-    .error-box {
-      margin: 24px 32px;
-      padding: 22px;
-      border-radius: 20px;
-      font-size: 20px;
-    }
-
-    .empty {
-      background: rgba(255,255,255,.03);
-      border: 1px solid rgba(255,255,255,.08);
-    }
-
-    .error-box {
-      background: rgba(239,68,68,.08);
-      border: 1px solid rgba(239,68,68,.28);
-      color: #fecaca;
-    }
-
-    .footer {
-      display: flex;
-      justify-content: space-between;
-      gap: 18px;
-      padding: 16px 32px 24px;
-      color: var(--muted);
-      font-size: 15px;
-      border-top: 1px solid var(--border);
-      flex-wrap: wrap;
-    }
-
-    .dot {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      margin-right: 8px;
-      background: var(--ok);
-      vertical-align: middle;
-      box-shadow: 0 0 0 0 rgba(34,197,94,.7);
-      animation: pulse 1.8s infinite;
-    }
-
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(34,197,94,.7); }
-      70% { box-shadow: 0 0 0 14px rgba(34,197,94,0); }
-      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-    }
-
-    @media (max-width: 760px) {
-      body {
-        padding: 10px;
-      }
-
-      .page {
-        gap: 16px;
-      }
-
-      .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 22px 20px;
-      }
-
-      .clock {
-        text-align: left;
-      }
-
-      .section-title {
-        padding: 16px 20px 12px;
-        font-size: 22px;
-      }
-
-      .table-head {
-        display: grid;
-        grid-template-columns: 72px 1fr 72px;
-        gap: 10px;
-        font-size: 10px;
-        letter-spacing: .05em;
-        padding: 12px 18px;
-      }
-
-      .table-head > :first-child { text-align: left; }
-      .table-head > :nth-child(2) { text-align: left; }
-      .table-head > :last-child { text-align: right; }
-
-      .row {
-        grid-template-columns: 1fr;
-        gap: 14px;
-        padding: 22px 18px;
-        min-height: auto;
-      }
-
-      .eta {
-        text-align: left;
-      }
-
-      .line-pill {
-        width: 92px;
-        height: 56px;
-        font-size: 30px;
-      }
-
-      .empty,
-      .error-box {
-        margin: 18px;
-      }
-
-      .footer {
-        padding: 14px 18px 18px;
-      }
-
-      #qrWrap {
-        width: 100%;
-        margin-left: 0 !important;
-      }
-    }
-  </style>
+</style>
 </head>
+
 <body>
-  <main class="page">
-    <section class="board">
-      <header class="page-header">
-        <div>
-          <h1 class="main-title">4G Live Departures Board</h1>
-        </div>
-        <div class="clock">
-          <div class="clock-time" id="clockTime">--:--</div>
-          <div class="clock-date" id="clockDate">--</div>
-        </div>
-      </header>
 
-      <section class="section">
-        <div class="section-title">Šilo Tiltas to Europos Aikštė</div>
-        <div class="table-head">
-          <div>Line</div>
-          <div>Destination</div>
-          <div>Arrival</div>
-        </div>
-        <div class="rows" id="rows-silo"></div>
-      </section>
+<div class="container">
 
-      <section class="section">
-        <div class="section-title">Europos Aikštė to Šilo Tiltas</div>
-        <div class="table-head">
-          <div>Line</div>
-          <div>Destination</div>
-          <div>Arrival</div>
-        </div>
-        <div class="rows" id="rows-europa"></div>
-      </section>
+<div class="header">
+<div class="title">4G Live Departures Board</div>
 
-      <div class="error-box" id="error" hidden></div>
+<div class="clock">
+<div class="clock-time" id="clockTime">--:--</div>
+<div class="clock-date" id="clockDate">--</div>
+</div>
+</div>
 
-      <footer class="footer">
-        <div id="status"><span class="dot"></span>Connecting to live data…</div>
-        <div id="updated">Not updated yet</div>
-        <div id="qrWrap" style="margin-left:auto; display:flex; align-items:center; gap:12px;">
-          <img id="qrImage" alt="QR code for this board" style="width:84px;height:84px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:white;padding:6px;" />
-          <div style="max-width:180px; line-height:1.35;">
-            <div style="font-weight:700; color:var(--text);">Open on your phone</div>
-            <div style="color:var(--muted); font-size:13px;">Scan the QR code to open this board.</div>
-          </div>
-        </div>
-      </footer>
-    </section>
-  </main>
 
-  <script>
-    const CONFIG = {
-      refreshMs: 20000,
-      proxy: '',
-      publicUrl: 'https://skujic.github.io/4g-live-board/',
-      soundAlertMinutes: [1, 2],
-      sourceUrl: stopId => `https://www.stops.lt/vilnius/departures2.php?stopid=${stopId}`,
-      sections: [
-        {
-          key: 'silo',
-          rowsId: 'rows-silo',
-          line: '4G',
-          stopIds: ['1139', '1129'],
-          includeKeywords: ['pilait', 'autobus', 'kirtim', 'eišiški', 'tiekimo']
-        },
-        {
-          key: 'europa',
-          rowsId: 'rows-europa',
-          line: '4G',
-          stopIds: ['0104'],
-          includeKeywords: ['saul', 'senoji plytin', 'drujos', 'oland', 'universitet']
-        }
-      ]
-    };
+<div class="section">
 
-    const el = {
-      status: document.getElementById('status'),
-      updated: document.getElementById('updated'),
-      error: document.getElementById('error'),
-      clockTime: document.getElementById('clockTime'),
-      clockDate: document.getElementById('clockDate'),
-      qrImage: document.getElementById('qrImage'),
-      rows: {
-        silo: document.getElementById('rows-silo'),
-        europa: document.getElementById('rows-europa')
-      }
-    };
+<div class="section-title">
+Šilo Tiltas → Europos Aikštė
+</div>
 
-    const alertState = new Set();
-    let lastRenderedTime = '';
-    let lastRenderedDate = '';
+<div class="table-head">
+<div>Line</div>
+<div>Destination</div>
+<div>Arrival</div>
+</div>
 
-    function updateClock() {
-      const now = new Date();
-      const nextTime = now.toLocaleTimeString('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      const nextDate = now.toLocaleDateString('en-GB', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+<div id="rows-silo"></div>
 
-      if (nextTime !== lastRenderedTime) {
-        el.clockTime.textContent = nextTime;
-        lastRenderedTime = nextTime;
-      }
+</div>
 
-      if (nextDate !== lastRenderedDate) {
-        el.clockDate.textContent = nextDate;
-        lastRenderedDate = nextDate;
-      }
-    }
 
-    function initQrCode() {
-      const target = CONFIG.publicUrl || window.location.href;
+<div class="section">
 
-      el.qrImage.onerror = () => {
-        const wrap = document.getElementById('qrWrap');
-        wrap.innerHTML = `
-          <div style="color: var(--muted); font-size: 13px;">
-            QR code could not load.<br>
-            Open this link on your phone:<br>
-            <a href="${target}" style="color: white; word-break: break-all;">${target}</a>
-          </div>
-        `;
-      };
+<div class="section-title">
+Europos Aikštė → Šilo Tiltas
+</div>
 
-      el.qrImage.src = `https://quickchart.io/qr?text=${encodeURIComponent(target)}&size=220`;
-    }
+<div class="table-head">
+<div>Line</div>
+<div>Destination</div>
+<div>Arrival</div>
+</div>
 
-    function playAlertBeep() {
-      try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
-        const now = ctx.currentTime;
+<div id="rows-europa"></div>
 
-        [880, 1174].forEach((freq, i) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
+</div>
 
-          osc.type = 'sine';
-          osc.frequency.value = freq;
-          gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02 + i * 0.18);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16 + i * 0.18);
+<div class="footer">
+Live data refresh every 20 seconds
+</div>
 
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(now + i * 0.18);
-          osc.stop(now + 0.18 + i * 0.18);
-        });
-      } catch (e) {}
-    }
+</div>
 
-    function maybePlayArrivalAlert(allArrivals) {
-      const trackedKeys = new Set();
 
-      for (const item of allArrivals) {
-        if (!CONFIG.soundAlertMinutes.includes(item.minutes)) continue;
-        const key = `${item.sectionKey}|${item.destination}|${item.minutes}`;
-        trackedKeys.add(key);
+<script>
 
-        if (!alertState.has(key)) {
-          alertState.add(key);
-          playAlertBeep();
-        }
-      }
+function updateClock(){
 
-      for (const existing of Array.from(alertState)) {
-        if (!trackedKeys.has(existing)) alertState.delete(existing);
-      }
-    }
+const now = new Date()
 
-    function fetchUrl(url) {
-      return fetch(CONFIG.proxy ? `${CONFIG.proxy}${encodeURIComponent(url)}` : url, {
-        headers: { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' }
-      }).then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      });
-    }
+document.getElementById("clockTime").innerText =
+now.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})
 
-    function textMinutes(text) {
-      const t = (text || '').trim().toLowerCase();
-      if (!t) return null;
-      if (t.includes('atvyk') || t === '0' || t === '0 min') return 0;
+document.getElementById("clockDate").innerText =
+now.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})
 
-      const m = t.match(/(\d+)\s*min/);
-      if (m) return Number(m[1]);
-      if (/^\d+$/.test(t)) return Number(t);
+}
 
-      return null;
-    }
+setInterval(updateClock,1000)
+updateClock()
 
-    function uniqueBy(items, keyFn) {
-      const seen = new Set();
-      return items.filter(item => {
-        const key = keyFn(item);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    }
 
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, ch => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      }[ch]));
-    }
+const STOP_SILO = ["1139","1129"]
+const STOP_EUROPA = ["0104"]
 
-    function matchesDirection(destination, keywords) {
-      if (!keywords || !keywords.length) return true;
-      const d = (destination || '').toLowerCase();
-      return keywords.some(k => d.includes(k));
-    }
+async function fetchStop(stop){
 
-    function parseDepartures(html, stopId, sectionConfig) {
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      const text = doc.body?.innerText || '';
-      const candidates = [];
-      const rows = Array.from(doc.querySelectorAll('tr, li, .departure, .times, .time, .item'));
+let url=`https://www.stops.lt/vilnius/departures2.php?stopid=${stop}`
 
-      for (const row of rows) {
-        const rowText = row.textContent.replace(/\s+/g, ' ').trim();
-        if (!rowText || !rowText.includes(sectionConfig.line)) continue;
+let r = await fetch(url)
 
-        const minuteMatch = rowText.match(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/);
-        const routeMatch = rowText.match(/\b(\d+G?|N\d+)\b/);
-        const destination = rowText
-          .replace(/\b(\d+G?|N\d+)\b/, '')
-          .replace(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/, '')
-          .trim();
-        const minutes = textMinutes(minuteMatch?.[0] || '');
+let text = await r.text()
 
-        if (
-          (routeMatch?.[1] || '') === sectionConfig.line &&
-          minutes !== null &&
-          matchesDirection(destination, sectionConfig.includeKeywords)
-        ) {
-          candidates.push({
-            sectionKey: sectionConfig.key,
-            line: sectionConfig.line,
-            destination: destination || 'Direction unavailable',
-            minutes,
-            stopId,
-            raw: rowText
-          });
-        }
-      }
+return text
 
-      if (!candidates.length && text.includes(sectionConfig.line)) {
-        const regex = new RegExp(`\\b${sectionConfig.line}\\b[^\\n]{0,120}?(\\d+\\s*min|atvyksta|Atvyksta|\\b\\d+\\b)`, 'g');
+}
 
-        for (const match of text.matchAll(regex)) {
-          const raw = match[0].replace(/\s+/g, ' ').trim();
-          const minutes = textMinutes(match[1]);
+function renderRow(destination,minutes){
 
-          if (minutes !== null) {
-            const destination = raw
-              .replace(new RegExp(`\\b${sectionConfig.line}\\b`), '')
-              .replace(/(\d+\s*min|atvyksta|Atvyksta|\b\d+\b)/, '')
-              .trim() || 'Direction unavailable';
+return `
+<div class="row">
+<div class="line">4G</div>
+<div class="destination">${destination}</div>
+<div class="eta">${minutes==0?"Now":minutes+" min"}</div>
+</div>
+`
 
-            if (matchesDirection(destination, sectionConfig.includeKeywords)) {
-              candidates.push({
-                sectionKey: sectionConfig.key,
-                line: sectionConfig.line,
-                destination,
-                minutes,
-                stopId,
-                raw
-              });
-            }
-          }
-        }
-      }
+}
 
-      return uniqueBy(candidates, x => `${x.destination}|${x.minutes}|${x.stopId}`)
-        .sort((a, b) => a.minutes - b.minutes)
-        .slice(0, 6);
-    }
+async function loadBoard(){
 
-    function renderSection(sectionKey, arrivals) {
-      const container = el.rows[sectionKey];
+try{
 
-      if (!arrivals.length) {
-        container.innerHTML = `<div class="empty">No live 4G departures found right now.</div>`;
-        return;
-      }
+let siloContainer=document.getElementById("rows-silo")
+let europaContainer=document.getElementById("rows-europa")
 
-      container.innerHTML = arrivals.map(item => {
-        const eta = item.minutes === 0 ? 'Now' : `${item.minutes} min`;
+siloContainer.innerHTML=""
+europaContainer.innerHTML=""
 
-        return `
-          <article class="row">
-            <div><div class="line-pill">${escapeHtml(item.line)}</div></div>
-            <div>
-              <div class="destination">${escapeHtml(item.destination)}</div>
-              <div class="meta">Stop source ID ${escapeHtml(item.stopId)}</div>
-            </div>
-            <div class="eta">${eta}<small>live</small></div>
-          </article>
-        `;
-      }).join('');
-    }
+for(let stop of STOP_SILO){
 
-    async function loadSection(sectionConfig) {
-      const results = await Promise.allSettled(
-        sectionConfig.stopIds.map(async stopId => {
-          const html = await fetchUrl(CONFIG.sourceUrl(stopId));
-          return parseDepartures(html, stopId, sectionConfig);
-        })
-      );
+let html=await fetchStop(stop)
 
-      const arrivals = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-      const okCount = results.filter(r => r.status === 'fulfilled').length;
+let matches=[...html.matchAll(/4G.*?(\d+)\s*min/gi)]
 
-      return {
-        key: sectionConfig.key,
-        arrivals: uniqueBy(arrivals, x => `${x.destination}|${x.minutes}`)
-          .sort((a, b) => a.minutes - b.minutes)
-          .slice(0, 4),
-        okCount,
-        requestedCount: sectionConfig.stopIds.length
-      };
-    }
+matches.slice(0,4).forEach(m=>{
 
-    async function load() {
-      el.status.innerHTML = '<span class="dot"></span>Refreshing live data…';
+let minutes=m[1]
 
-      const sectionResults = await Promise.all(CONFIG.sections.map(loadSection));
-      const allArrivals = sectionResults.flatMap(x => x.arrivals);
-      const totalOk = sectionResults.reduce((sum, x) => sum + x.okCount, 0);
-      const totalRequested = sectionResults.reduce((sum, x) => sum + x.requestedCount, 0);
+siloContainer.innerHTML+=renderRow("Europos Aikštė",minutes)
 
-      if (!allArrivals.length && totalOk === 0) {
-        throw new Error('The browser could not read live data. This is usually a CORS block. Add a tiny proxy URL in CONFIG.proxy before publishing.');
-      }
+})
 
-      for (const section of sectionResults) {
-        renderSection(section.key, section.arrivals);
-      }
+}
 
-      maybePlayArrivalAlert(allArrivals);
+for(let stop of STOP_EUROPA){
 
-      el.error.hidden = true;
-      el.status.innerHTML = `<span class="dot"></span>${totalOk === totalRequested ? 'Live data OK' : `Partial live data OK (${totalOk}/${totalRequested})`}`;
-      el.updated.textContent = `Updated: ${new Date().toLocaleTimeString('en-GB')}`;
-    }
+let html=await fetchStop(stop)
 
-    async function refreshLoop() {
-      updateClock();
+let matches=[...html.matchAll(/4G.*?(\d+)\s*min/gi)]
 
-      try {
-        await load();
-      } catch (err) {
-        el.error.hidden = false;
-        el.error.textContent = err.message;
-        el.status.textContent = 'Live data unavailable';
+matches.slice(0,4).forEach(m=>{
 
-        renderSection('silo', []);
-        renderSection('europa', []);
-      }
-    }
+let minutes=m[1]
 
-    updateClock();
-    initQrCode();
-    refreshLoop();
-    setInterval(updateClock, 1000);
-    setInterval(refreshLoop, CONFIG.refreshMs);
-  </script>
+europaContainer.innerHTML+=renderRow("Šilo Tiltas",minutes)
+
+})
+
+}
+
+}
+catch(e){
+
+console.log("Live data blocked locally (works on GitHub Pages)")
+
+}
+
+}
+
+loadBoard()
+setInterval(loadBoard,20000)
+
+</script>
+
 </body>
 </html>
