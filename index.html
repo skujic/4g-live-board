@@ -314,12 +314,10 @@ body{
     line-height:1.4;
   }
 
-  /* hide desktop table header */
   .table-head{
     display:none;
   }
 
-  /* mobile row card */
   .row{
     display:grid;
     grid-template-columns:1fr 1fr;
@@ -353,18 +351,26 @@ body{
     font-weight:600;
     letter-spacing:0.02em;
   }
-  .cell-eta::before{
-    content:"At first stop";
-  }
-  .cell-destination::before{
-    content:"At second stop";
-  }
   .cell-travel::before{
     content:"Travel";
   }
   .cell-vehicle::before{
     content:"Vehicle";
   }
+
+  .row-pilaite .cell-eta::before{
+    content:"At 1129";
+  }
+  .row-pilaite .cell-destination::before{
+    content:"At 0104";
+  }
+  .row-sauletekis .cell-eta::before{
+    content:"At 0103";
+  }
+  .row-sauletekis .cell-destination::before{
+    content:"At 1139";
+  }
+
   .footer{
     padding:14px 16px;
     font-size:12px;
@@ -518,9 +524,9 @@ function formatTravel(minutes){
   return `${minutes} min`;
 }
 
-function renderRow(item){
+function renderRow(item, corridorId){
   return `
-    <div class="row">
+    <div class="row row-${corridorId}">
       <div class="cell-line">4G</div>
       <div class="cell-eta">${formatEta(item.originEtaMin)}</div>
       <div class="cell-destination">${formatEta(item.destinationEtaMin)}</div>
@@ -590,9 +596,12 @@ function handleAlerts(corridorId, arrivals){
   if (!alertsEnabled) return;
 
   const newlyTriggered = arrivals.filter(item => {
-    if (item.originEtaMin !== 4) return false;
+    if (typeof item.originEtaMin !== "number") return false;
+    if (item.originEtaMin > 4) return false;
+
     const key = getAlertKey(corridorId, item);
     if (alertedTrips.has(key)) return false;
+
     alertedTrips.add(key);
     return true;
   });
@@ -607,7 +616,7 @@ function handleAlerts(corridorId, arrivals){
     : "Europos aikštė → Šilo tiltas";
 
   document.getElementById("statusBox").innerText =
-    `4-minute alert: 4G vehicle ${first.vehicleId || "—"} is about 4 minutes away on ${directionLabel}.`;
+    `Arrival alert: 4G vehicle ${first.vehicleId || "—"} is ${first.originEtaMin} minute${first.originEtaMin === 1 ? "" : "s"} away on ${directionLabel}.`;
 }
 
 async function loadBoard(forceMessage = false){
@@ -641,13 +650,13 @@ async function loadBoard(forceMessage = false){
     const sauletekisArrivals = sanitizeArrivals(sauletekis?.arrivals);
 
     if (pilaiteArrivals.length) {
-      rowsPilaite.innerHTML = pilaiteArrivals.map(renderRow).join("");
+      rowsPilaite.innerHTML = pilaiteArrivals.map(item => renderRow(item, "pilaite")).join("");
     } else {
       renderEmpty(rowsPilaite, "No live estimated 4G arrivals found right now.");
     }
 
     if (sauletekisArrivals.length) {
-      rowsSauletekis.innerHTML = sauletekisArrivals.map(renderRow).join("");
+      rowsSauletekis.innerHTML = sauletekisArrivals.map(item => renderRow(item, "sauletekis")).join("");
     } else {
       renderEmpty(rowsSauletekis, "No live estimated 4G arrivals found right now.");
     }
