@@ -1,12 +1,16 @@
 import AdmZip from "adm-zip";
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
 
+const API_VERSION = "eta-vehiclepos-v1";
+
 const STATIC_GTFS_URL = "https://www.stops.lt/vilnius/vilnius/gtfs.zip";
-const TRIP_UPDATES_URL = "https://www.stops.lt/vilnius/trip_updates.pb";
+const VEHICLE_POSITIONS_URL = "https://www.stops.lt/vilnius/vehicle_positions.pb";
 const ROUTE_SHORT_NAME = "4G";
 
 const STATIC_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const REALTIME_TIMEOUT_MS = 15000;
+const MAX_ETA_MIN = 90;
+const STALE_VEHICLE_SEC = 1800; // 30 min
 
 const CORRIDORS = [
   {
@@ -138,13 +142,6 @@ function parseGtfsTimeToSeconds(value) {
   return parts[0] * 3600 + parts[1] * 60 + parts[2];
 }
 
-function getServiceDateParts(now = new Date()) {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return { y, m, d };
-}
-
 function getServiceDayBaseUnix(now = new Date()) {
   const midnight = new Date(now);
   midnight.setHours(0, 0, 0, 0);
@@ -156,22 +153,17 @@ function gtfsSecondsToUnix(gtfsSeconds, now = new Date()) {
   return getServiceDayBaseUnix(now) + gtfsSeconds;
 }
 
-function getStopUpdateTime(stopUpdate) {
-  const arrivalTime = stopUpdate?.arrival?.time != null ? Number(stopUpdate.arrival.time) : null;
-  const departureTime = stopUpdate?.departure?.time != null ? Number(stopUpdate.departure.time) : null;
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = d => (d * Math.PI) / 180;
+  const R = 6371000;
 
-  if (Number.isFinite(arrivalTime) && arrivalTime > 0) return arrivalTime;
-  if (Number.isFinite(departureTime) && departureTime > 0) return departureTime;
-  return null;
-}
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
 
-function getStopUpdateDelay(stopUpdate) {
-  const arrivalDelay = stopUpdate?.arrival?.delay != null ? Number(stopUpdate.arrival.delay) : null;
-  const departureDelay = stopUpdate?.departure?.delay != null ? Number(stopUpdate.departure.delay) : null;
-
-  if (Number.isFinite(arrivalDelay)) return arrivalDelay;
-  if (Number.isFinite(departureDelay)) return departureDelay;
-  return null;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }
 
 function minutesFromNow(timestampSec, nowSec) {
@@ -179,62 +171,42 @@ function minutesFromNow(timestampSec, nowSec) {
   return Math.max(0, Math.ceil((timestampSec - nowSec) / 60));
 }
 
-function findStopUpdate(updates, stopId, stopSequence) {
-  if (!Array.isArray(updates) || !updates.length) {
-    return { match: null, mode: null };
-  }
-
-  const byStopId = updates.find(
-    u => String(u.stopId || "").trim() === String(stopId || "").trim()
-  );
-  if (byStopId) {
-    return { match: byStopId, mode: "stop_id" };
-  }
-
-  const bySequence = updates.find(u => {
-    const seq = Number(u.stopSequence);
-    return Number.isFinite(seq) && seq === Number(stopSequence);
+function chooseBestStopPair(stopsForTrip, stopsById, corridor) {
+  const originCandidates = stopsForTrip.filter(s => {
+    const stopMeta = stopsById.get(s.stopId);
+    return stopMeta && stopMeta.stopNameNorm === normalizeName(corridor.originStopName);
   });
-  if (bySequence) {
-    return { match: bySequence, mode: "stop_sequence" };
-  }
 
-  return { match: null, mode: null };
-}
+  const destinationCandidates = stopsForTrip.filter(s => {
+    const stopMeta = stopsById.get(s.stopId);
+    return stopMeta && stopMeta.stopNameNorm === normalizeName(corridor.destinationStopName);
+  });
 
-function estimateDelaySeconds(updates, targetSequence, stopTimesBySequence) {
-  if (!Array.isArray(updates) || !updates.length) return null;
+  if (!originCandidates.length || !destinationCandidates.length) return null;
 
-  let best = null;
+  let bestPair = null;
 
-  for (const update of updates) {
-    const seq = Number(update.stopSequence);
-    if (!Number.isFinite(seq)) continue;
+  for (const origin of originCandidates) {
+    for (const destination of destinationCandidates) {
+      if (origin.sequence >= destination.sequence) continue;
 
-    const scheduled = stopTimesBySequence.get(seq);
-    if (!scheduled) continue;
-
-    const exactTime = getStopUpdateTime(update);
-    const explicitDelay = getStopUpdateDelay(update);
-
-    let delay = null;
-
-    if (Number.isFinite(explicitDelay)) {
-      delay = explicitDelay;
-    } else if (Number.isFinite(exactTime) && Number.isFinite(scheduled.scheduledTs)) {
-      delay = exactTime - scheduled.scheduledTs;
-    }
-
-    if (!Number.isFinite(delay)) continue;
-
-    const distance = Math.abs(seq - targetSequence);
-
-    if (!best || distance < best.distance) {
-      best = { delay, distance, sourceSequence: seq };
+      if (
+        !bestPair ||
+        destination.sequence - origin.sequence < bestPair.destinationSequence - bestPair.originSequence
+      ) {
+        bestPair = {
+          originStopId: origin.stopId,
+          destinationStopId: destination.stopId,
+          originSequence: origin.sequence,
+          destinationSequence: destination.sequence,
+          originScheduledSecs: origin.scheduledSecs,
+          destinationScheduledSecs: destination.scheduledSecs
+        };
+      }
     }
   }
 
-  return best;
+  return bestPair;
 }
 
 async function loadStaticGtfs() {
@@ -270,7 +242,9 @@ async function loadStaticGtfs() {
     stopsById.set(stopId, {
       stopId,
       stopName: String(stop.stop_name || "").trim(),
-      stopNameNorm: normalizeName(stop.stop_name || "")
+      stopNameNorm: normalizeName(stop.stop_name || ""),
+      lat: Number(stop.stop_lat),
+      lon: Number(stop.stop_lon)
     });
   }
 
@@ -284,7 +258,8 @@ async function loadStaticGtfs() {
       tripId,
       routeId,
       headsign: String(trip.trip_headsign || "").trim(),
-      directionId: String(trip.direction_id || "").trim()
+      directionId: String(trip.direction_id || "").trim(),
+      serviceId: String(trip.service_id || "").trim()
     });
   }
 
@@ -325,53 +300,24 @@ async function loadStaticGtfs() {
   }
 
   for (const [tripId, stopsForTrip] of stopTimesByTrip.entries()) {
+    const stopTimesBySequence = new Map();
+
+    for (const stop of stopsForTrip) {
+      const stopMeta = stopsById.get(stop.stopId);
+      stopTimesBySequence.set(stop.sequence, {
+        stopId: stop.stopId,
+        scheduledSecs: stop.scheduledSecs,
+        lat: stopMeta?.lat ?? null,
+        lon: stopMeta?.lon ?? null
+      });
+    }
+
     for (const corridor of CORRIDORS) {
-      const originCandidates = stopsForTrip.filter(s => {
-        const stopMeta = stopsById.get(s.stopId);
-        return stopMeta && stopMeta.stopNameNorm === normalizeName(corridor.originStopName);
-      });
-
-      const destinationCandidates = stopsForTrip.filter(s => {
-        const stopMeta = stopsById.get(s.stopId);
-        return stopMeta && stopMeta.stopNameNorm === normalizeName(corridor.destinationStopName);
-      });
-
-      if (!originCandidates.length || !destinationCandidates.length) continue;
-
-      let bestPair = null;
-
-      for (const origin of originCandidates) {
-        for (const destination of destinationCandidates) {
-          if (origin.sequence >= destination.sequence) continue;
-
-          if (
-            !bestPair ||
-            destination.sequence - origin.sequence < bestPair.destinationSequence - bestPair.originSequence
-          ) {
-            bestPair = {
-              originStopId: origin.stopId,
-              destinationStopId: destination.stopId,
-              originSequence: origin.sequence,
-              destinationSequence: destination.sequence,
-              originScheduledSecs: origin.scheduledSecs,
-              destinationScheduledSecs: destination.scheduledSecs
-            };
-          }
-        }
-      }
-
-      if (!bestPair) continue;
-
-      const stopTimesBySequence = new Map();
-      for (const stop of stopsForTrip) {
-        stopTimesBySequence.set(stop.sequence, {
-          stopId: stop.stopId,
-          scheduledSecs: stop.scheduledSecs
-        });
-      }
+      const pair = chooseBestStopPair(stopsForTrip, stopsById, corridor);
+      if (!pair) continue;
 
       corridorTripIndex.get(corridor.id).set(tripId, {
-        ...bestPair,
+        ...pair,
         stopTimesBySequence
       });
     }
@@ -391,13 +337,68 @@ async function loadStaticGtfs() {
   return data;
 }
 
+function estimateEtaFromVehiclePosition({
+  vehicleLat,
+  vehicleLon,
+  vehicleTimestamp,
+  corridorInfo,
+  nowSec,
+  now
+}) {
+  if (!Number.isFinite(vehicleLat) || !Number.isFinite(vehicleLon)) return null;
+  if (!Number.isFinite(vehicleTimestamp)) return null;
+
+  let nearestSequence = null;
+  let nearestDistance = Infinity;
+
+  for (const [sequence, stopInfo] of corridorInfo.stopTimesBySequence.entries()) {
+    if (!Number.isFinite(stopInfo.lat) || !Number.isFinite(stopInfo.lon)) continue;
+
+    const d = haversineMeters(vehicleLat, vehicleLon, stopInfo.lat, stopInfo.lon);
+    if (d < nearestDistance) {
+      nearestDistance = d;
+      nearestSequence = Number(sequence);
+    }
+  }
+
+  if (!Number.isFinite(nearestSequence)) return null;
+
+  const nearestStop = corridorInfo.stopTimesBySequence.get(nearestSequence);
+  if (!nearestStop || !Number.isFinite(nearestStop.scheduledSecs)) return null;
+
+  const scheduledNearestTs = gtfsSecondsToUnix(nearestStop.scheduledSecs, now);
+  if (!Number.isFinite(scheduledNearestTs)) return null;
+
+  const estimatedDelay = vehicleTimestamp - scheduledNearestTs;
+
+  const originScheduledTs = gtfsSecondsToUnix(corridorInfo.originScheduledSecs, now);
+  const destinationScheduledTs = gtfsSecondsToUnix(corridorInfo.destinationScheduledSecs, now);
+
+  if (!Number.isFinite(originScheduledTs)) return null;
+
+  const originTs = originScheduledTs + estimatedDelay;
+  const destinationTs = Number.isFinite(destinationScheduledTs)
+    ? destinationScheduledTs + estimatedDelay
+    : null;
+
+  if (originTs < nowSec - 120) return null;
+
+  return {
+    originTs,
+    destinationTs,
+    nearestSequence,
+    nearestDistance,
+    estimatedDelay
+  };
+}
+
 async function loadRealtimeEta(debugMode = false) {
   const staticData = await loadStaticGtfs();
   const now = new Date();
   const nowSec = Math.floor(now.getTime() / 1000);
 
-  const realtimeBuffer = await fetchBuffer(TRIP_UPDATES_URL, REALTIME_TIMEOUT_MS);
-  const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(realtimeBuffer);
+  const vehicleBuffer = await fetchBuffer(VEHICLE_POSITIONS_URL, REALTIME_TIMEOUT_MS);
+  const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(vehicleBuffer);
 
   const results = {};
   for (const corridor of CORRIDORS) {
@@ -405,126 +406,101 @@ async function loadRealtimeEta(debugMode = false) {
   }
 
   const debug = {
+    version: API_VERSION,
     staticRouteIdsFound: staticData.routesCount,
     static4GTripsFound: staticData.tripsById.size,
     staticCorridorTrips: Object.fromEntries(
       CORRIDORS.map(c => [c.id, staticData.corridorTripIndex.get(c.id)?.size || 0])
     ),
-    realtimeEntities: 0,
-    realtimeTripUpdates: 0,
-    realtimeTripIdsMatchingStatic4G: 0,
-    corridorTripMatchesSeen: {
+    vehicleEntities: 0,
+    vehiclePositions: 0,
+    matching4GVehicles: 0,
+    corridorVehicleMatchesSeen: {
       pilaite: 0,
       sauletekis: 0
     },
-    exactOriginMatches: 0,
-    exactDestinationMatches: 0,
-    estimatedOriginMatches: 0,
-    estimatedDestinationMatches: 0,
+    estimatedRows: {
+      pilaite: 0,
+      sauletekis: 0
+    },
     samples: {
       pilaiteRows: [],
       sauletekisRows: []
     }
   };
 
-  const seenMatchingTripIds = new Set();
-
   for (const entity of feed.entity || []) {
-    debug.realtimeEntities += 1;
+    debug.vehicleEntities += 1;
 
-    const tripUpdate = entity.tripUpdate;
-    if (!tripUpdate || !tripUpdate.trip) continue;
+    const vehicle = entity.vehicle;
+    if (!vehicle || !vehicle.trip) continue;
 
-    debug.realtimeTripUpdates += 1;
+    debug.vehiclePositions += 1;
 
-    const tripId = String(tripUpdate.trip.tripId || "").trim();
+    const tripId = String(vehicle.trip.tripId || "").trim();
     if (!tripId) continue;
 
     const tripMeta = staticData.tripsById.get(tripId);
     if (!tripMeta) continue;
 
-    seenMatchingTripIds.add(tripId);
+    debug.matching4GVehicles += 1;
 
-    const updates = Array.isArray(tripUpdate.stopTimeUpdate) ? tripUpdate.stopTimeUpdate : [];
+    const vehicleLat = Number(vehicle.position?.latitude);
+    const vehicleLon = Number(vehicle.position?.longitude);
+    const vehicleTs = vehicle.timestamp != null ? Number(vehicle.timestamp) : null;
+    const vehicleId = vehicle.vehicle?.id ? String(vehicle.vehicle.id) : null;
+
+    if (!Number.isFinite(vehicleTs)) continue;
+    if (vehicleTs < nowSec - STALE_VEHICLE_SEC) continue;
 
     for (const corridor of CORRIDORS) {
       const corridorInfo = staticData.corridorTripIndex.get(corridor.id)?.get(tripId);
       if (!corridorInfo) continue;
 
-      debug.corridorTripMatchesSeen[corridor.id] += 1;
+      debug.corridorVehicleMatchesSeen[corridor.id] += 1;
 
-      const originResult = findStopUpdate(
-        updates,
-        corridorInfo.originStopId,
-        corridorInfo.originSequence
-      );
+      const eta = estimateEtaFromVehiclePosition({
+        vehicleLat,
+        vehicleLon,
+        vehicleTimestamp: vehicleTs,
+        corridorInfo,
+        nowSec,
+        now
+      });
 
-      const destinationResult = findStopUpdate(
-        updates,
-        corridorInfo.destinationStopId,
-        corridorInfo.destinationSequence
-      );
+      if (!eta) continue;
 
-      let originTs = getStopUpdateTime(originResult.match);
-      let destinationTs = getStopUpdateTime(destinationResult.match);
+      const originEtaMin = minutesFromNow(eta.originTs, nowSec);
+      const destinationEtaMin = Number.isFinite(eta.destinationTs)
+        ? minutesFromNow(eta.destinationTs, nowSec)
+        : null;
 
-      if (Number.isFinite(originTs)) {
-        debug.exactOriginMatches += 1;
-      }
-      if (Number.isFinite(destinationTs)) {
-        debug.exactDestinationMatches += 1;
-      }
-
-      if (!Number.isFinite(originTs)) {
-        const delayInfo = estimateDelaySeconds(
-          updates,
-          corridorInfo.originSequence,
-          corridorInfo.stopTimesBySequence
-        );
-
-        if (delayInfo && Number.isFinite(corridorInfo.originScheduledSecs)) {
-          originTs = gtfsSecondsToUnix(corridorInfo.originScheduledSecs, now) + delayInfo.delay;
-          debug.estimatedOriginMatches += 1;
-        }
-      }
-
-      if (!Number.isFinite(destinationTs)) {
-        const delayInfo = estimateDelaySeconds(
-          updates,
-          corridorInfo.destinationSequence,
-          corridorInfo.stopTimesBySequence
-        );
-
-        if (delayInfo && Number.isFinite(corridorInfo.destinationScheduledSecs)) {
-          destinationTs = gtfsSecondsToUnix(corridorInfo.destinationScheduledSecs, now) + delayInfo.delay;
-          debug.estimatedDestinationMatches += 1;
-        }
-      }
-
-      if (!Number.isFinite(originTs)) continue;
-      if (originTs < nowSec - 120) continue;
+      if (!Number.isFinite(originEtaMin)) continue;
+      if (originEtaMin > MAX_ETA_MIN) continue;
 
       const row = {
         tripId,
         headsign: tripMeta.headsign || null,
-        vehicleId: tripUpdate.vehicle?.id ? String(tripUpdate.vehicle.id) : null,
-        originEtaMin: minutesFromNow(originTs, nowSec),
-        destinationEtaMin: Number.isFinite(destinationTs) ? minutesFromNow(destinationTs, nowSec) : null,
+        vehicleId,
+        originEtaMin,
+        destinationEtaMin,
         travelMinutes:
-          Number.isFinite(destinationTs) && destinationTs >= originTs
-            ? Math.round((destinationTs - originTs) / 60)
-            : null
+          Number.isFinite(destinationEtaMin) && Number.isFinite(originEtaMin)
+            ? Math.max(0, destinationEtaMin - originEtaMin)
+            : null,
+        estimateSource: "vehicle_position",
+        nearestSequence: eta.nearestSequence,
+        nearestDistanceMeters: Math.round(eta.nearestDistance)
       };
 
       results[corridor.id].push(row);
+      debug.estimatedRows[corridor.id] += 1;
 
       if (debug.samples[`${corridor.id}Rows`].length < 5) {
         debug.samples[`${corridor.id}Rows`].push(row);
       }
     }
   }
-
-  debug.realtimeTripIdsMatchingStatic4G = seenMatchingTripIds.size;
 
   for (const corridor of CORRIDORS) {
     const deduped = new Map();
@@ -564,11 +540,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      version: API_VERSION,
       ...payload
     });
   } catch (err) {
     return res.status(500).json({
       ok: false,
+      version: API_VERSION,
       error: "Failed to build realtime ETA",
       details: String(err)
     });
