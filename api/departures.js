@@ -18,26 +18,11 @@ export default async function handler(req, res) {
 
     const html = await response.text();
 
-    // Make parsing much more tolerant
-    const text = html.replace(/\s+/g, " ");
-
-    const matches = [
-      ...text.matchAll(/4G.{0,200}?(\d+)\s*min/gi),
-      ...text.matchAll(/4G.{0,200}?>(\d+)</gi),
-      ...text.matchAll(/4G.{0,200}?\b(\d{1,2})\b/gi)
-    ];
-
-    const minutes = [...new Set(
-      matches
-        .map(m => Number(m[1]))
-        .filter(n => Number.isFinite(n) && n >= 0 && n <= 120)
-    )].sort((a, b) => a - b);
-
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.status(200).json({
       stopId,
-      minutes,
-      ok: true
+      ok: true,
+      preview: html.slice(0, 3000)
     });
 
   } catch (err) {
