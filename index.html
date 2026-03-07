@@ -231,19 +231,19 @@ return `
 
 async function loadBoard(){
 
-try{
-
 let siloContainer=document.getElementById("rows-silo")
 let europaContainer=document.getElementById("rows-europa")
 
 siloContainer.innerHTML=""
 europaContainer.innerHTML=""
 
+try{
+
 for(let stop of STOP_SILO){
 
 let html=await fetchStop(stop)
 
-let matches=[...html.matchAll(/4G.*?(\d+)\s*min/gi)]
+let matches=[...html.matchAll(/4G.*?(\\d+)\\s*min/gi)]
 
 matches.slice(0,4).forEach(m=>{
 
@@ -259,7 +259,7 @@ for(let stop of STOP_EUROPA){
 
 let html=await fetchStop(stop)
 
-let matches=[...html.matchAll(/4G.*?(\d+)\s*min/gi)]
+let matches=[...html.matchAll(/4G.*?(\\d+)\\s*min/gi)]
 
 matches.slice(0,4).forEach(m=>{
 
@@ -271,10 +271,9 @@ europaContainer.innerHTML+=renderRow("Šilo Tiltas",minutes)
 
 }
 
-}
-catch(e){
+}catch(e){
 
-console.log("Live data blocked locally (works on GitHub Pages)")
+console.log("Live data loading issue")
 
 }
 
