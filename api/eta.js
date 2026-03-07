@@ -147,7 +147,7 @@ async function loadStaticGtfs() {
   for (const trip of trips) {
     const routeId = String(trip.route_id || "").trim();
     const tripId = String(trip.trip_id || "").trim();
-    if (!targetRouteIds.has(routeId) || !tripId) continue;
+    if (!tripId || !targetRouteIds.has(routeId)) continue;
 
     tripsById.set(tripId, {
       tripId,
@@ -165,7 +165,6 @@ async function loadStaticGtfs() {
 
     const stopId = String(st.stop_id || "").trim();
     const sequence = Number(st.stop_sequence);
-
     if (!stopId || !Number.isFinite(sequence)) continue;
 
     if (!stopTimesByTrip.has(tripId)) {
@@ -206,6 +205,7 @@ async function loadStaticGtfs() {
   }
 
   const data = {
+    routesCount: targetRouteIds.size,
     tripsById,
     corridorTripIndex
   };
@@ -233,25 +233,23 @@ function minutesFromNow(timestampSec, nowSec) {
 }
 
 function findStopUpdate(updates, stopId, stopSequence) {
-  if (!Array.isArray(updates) || !updates.length) return null;
+  if (!Array.isArray(updates) || !updates.length) return { match: null, mode: null };
 
-  // First try exact stop_id match
   const byStopId = updates.find(
     u => String(u.stopId || "").trim() === String(stopId || "").trim()
   );
-  if (byStopId) return byStopId;
+  if (byStopId) return { match: byStopId, mode: "stop_id" };
 
-  // Then try exact stop_sequence match
   const bySequence = updates.find(u => {
     const seq = Number(u.stopSequence);
     return Number.isFinite(seq) && seq === Number(stopSequence);
   });
-  if (bySequence) return bySequence;
+  if (bySequence) return { match: bySequence, mode: "stop_sequence" };
 
-  return null;
+  return { match: null, mode: null };
 }
 
-async function loadRealtimeEta() {
+async function loadRealtimeEta(debugMode = false) {
   const staticData = await loadStaticGtfs();
   const nowSec = Math.floor(Date.now() / 1000);
 
@@ -263,15 +261,64 @@ async function loadRealtimeEta() {
     results[corridor.id] = [];
   }
 
+  const debug = {
+    staticRouteIdsFound: staticData.routesCount,
+    static4GTripsFound: staticData.tripsById.size,
+    staticCorridorTrips: Object.fromEntries(
+      CORRIDORS.map(c => [c.id, staticData.corridorTripIndex.get(c.id)?.size || 0])
+    ),
+    realtimeEntities: 0,
+    realtimeTripUpdates: 0,
+    realtimeTripIdsSeen: 0,
+    realtimeTripIdsMatchingStatic4G: 0,
+    corridorTripMatchesSeen: {
+      pilaite: 0,
+      sauletekis: 0
+    },
+    stopMatchModes: {
+      originByStopId: 0,
+      originBySequence: 0,
+      destinationByStopId: 0,
+      destinationBySequence: 0
+    },
+    samples: {
+      realtimeTripIds: [],
+      matchingTripIds: [],
+      pilaiteRows: [],
+      sauletekisRows: []
+    }
+  };
+
+  const seenRealtimeTripIds = new Set();
+  const seenMatchingTripIds = new Set();
+
   for (const entity of feed.entity || []) {
+    debug.realtimeEntities += 1;
+
     const tripUpdate = entity.tripUpdate;
     if (!tripUpdate || !tripUpdate.trip) continue;
+
+    debug.realtimeTripUpdates += 1;
 
     const tripId = String(tripUpdate.trip.tripId || "").trim();
     if (!tripId) continue;
 
+    if (!seenRealtimeTripIds.has(tripId)) {
+      seenRealtimeTripIds.add(tripId);
+      if (debug.samples.realtimeTripIds.length < 10) {
+        debug.samples.realtimeTripIds.push(tripId);
+      }
+    }
+
     const tripMeta = staticData.tripsById.get(tripId);
     if (!tripMeta) continue;
+
+    if (!seenMatchingTripIds.has(tripId)) {
+      seenMatchingTripIds.add(tripId);
+      if (debug.samples.matchingTripIds.length < 10) {
+        debug.samples.matchingTripIds.push(tripId);
+      }
+    }
 
     const updates = Array.isArray(tripUpdate.stopTimeUpdate) ? tripUpdate.stopTimeUpdate : [];
 
@@ -279,24 +326,31 @@ async function loadRealtimeEta() {
       const corridorInfo = staticData.corridorTripIndex.get(corridor.id)?.get(tripId);
       if (!corridorInfo) continue;
 
-      const originUpdate = findStopUpdate(
+      debug.corridorTripMatchesSeen[corridor.id] += 1;
+
+      const originResult = findStopUpdate(
         updates,
         corridorInfo.originStopId,
         corridorInfo.originSequence
       );
 
-      const destinationUpdate = findStopUpdate(
+      const destinationResult = findStopUpdate(
         updates,
         corridorInfo.destinationStopId,
         corridorInfo.destinationSequence
       );
 
-      const originTs = getStopUpdateTime(originUpdate);
-      const destinationTs = getStopUpdateTime(destinationUpdate);
+      if (originResult.mode === "stop_id") debug.stopMatchModes.originByStopId += 1;
+      if (originResult.mode === "stop_sequence") debug.stopMatchModes.originBySequence += 1;
+      if (destinationResult.mode === "stop_id") debug.stopMatchModes.destinationByStopId += 1;
+      if (destinationResult.mode === "stop_sequence") debug.stopMatchModes.destinationBySequence += 1;
+
+      const originTs = getStopUpdateTime(originResult.match);
+      const destinationTs = getStopUpdateTime(destinationResult.match);
 
       if (!originTs || originTs < nowSec - 120) continue;
 
-      results[corridor.id].push({
+      const row = {
         tripId,
         headsign: tripMeta.headsign || null,
         vehicleId: tripUpdate.vehicle?.id ? String(tripUpdate.vehicle.id) : null,
@@ -312,9 +366,18 @@ async function loadRealtimeEta() {
           destinationTs && destinationTs >= originTs
             ? Math.round((destinationTs - originTs) / 60)
             : null
-      });
+      };
+
+      results[corridor.id].push(row);
+
+      if (debug.samples[`${corridor.id}Rows`].length < 5) {
+        debug.samples[`${corridor.id}Rows`].push(row);
+      }
     }
   }
+
+  debug.realtimeTripIdsSeen = seenRealtimeTripIds.size;
+  debug.realtimeTripIdsMatchingStatic4G = seenMatchingTripIds.size;
 
   for (const corridor of CORRIDORS) {
     const deduped = new Map();
@@ -339,13 +402,15 @@ async function loadRealtimeEta() {
       originStopId: corridor.originStopId,
       destinationStopId: corridor.destinationStopId,
       arrivals: results[corridor.id]
-    }))
+    })),
+    ...(debugMode ? { debug } : {})
   };
 }
 
 export default async function handler(req, res) {
   try {
-    const payload = await loadRealtimeEta();
+    const debugMode = String(req.query.debug || "").trim() === "1";
+    const payload = await loadRealtimeEta(debugMode);
 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "s-maxage=10, stale-while-revalidate=20");
