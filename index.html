@@ -212,7 +212,6 @@ body{
   color:#9aa4b2;
 }
 
-/* tablet */
 @media (max-width:1080px){
   .header{
     flex-direction:column;
@@ -224,7 +223,6 @@ body{
   }
 }
 
-/* one-column board */
 @media (max-width:980px){
   .grid{
     grid-template-columns:1fr;
@@ -234,7 +232,6 @@ body{
   }
 }
 
-/* mobile portrait */
 @media (max-width:760px){
   body{
     padding:10px;
@@ -378,7 +375,6 @@ body{
   }
 }
 
-/* very narrow phones */
 @media (max-width:420px){
   .title{
     font-size:22px;
@@ -409,7 +405,7 @@ body{
       <div class="title">4G Live ETA Board</div>
       <div class="toolbar">
         <button class="btn" id="refreshBtn" type="button">Refresh now</button>
-        <button class="btn btn-secondary" id="alertBtn" type="button">Enable 4-min alert</button>
+        <button class="btn btn-secondary" id="alertBtn" type="button">Enable 5-min alert</button>
       </div>
     </div>
 
@@ -469,7 +465,7 @@ body{
   </div>
 
   <div class="footer">
-    ETA is estimated from GTFS realtime vehicle positions and refreshes every 20 seconds. The 4-minute sound alert works after you click Enable 4-min alert and keep the page open.
+    ETA is estimated from GTFS realtime vehicle positions and refreshes every 20 seconds. The 5-minute sound alert works after you click Enable 5-min alert and keep the page open.
   </div>
 </div>
 
@@ -574,9 +570,9 @@ function playBeep(){
   const now = audioContext.currentTime;
 
   const notes = [
-    { freq: 1046.5, start: 0.00, duration: 0.18 }, // C6
-    { freq: 1318.5, start: 0.22, duration: 0.18 }, // E6
-    { freq: 1568.0, start: 0.44, duration: 0.26 }  // G6
+    { freq: 1046.5, start: 0.00, duration: 0.18 },
+    { freq: 1318.5, start: 0.22, duration: 0.18 },
+    { freq: 1568.0, start: 0.44, duration: 0.26 }
   ];
 
   notes.forEach(note => {
@@ -603,7 +599,6 @@ function playBeep(){
     osc.stop(now + note.start + note.duration + 0.02);
   });
 
-  // Optional phone vibration
   if (navigator.vibrate) {
     navigator.vibrate([180, 70, 180]);
   }
@@ -612,14 +607,17 @@ function playBeep(){
 function handleAlerts(corridorId, arrivals){
   if (!alertsEnabled) return;
 
-  // Sound alert only for Šilo tiltas → Europos aikštė
+  // Only alert for Šilo tiltas → Europos aikštė
   if (corridorId !== "pilaite") return;
 
   const newlyTriggered = arrivals.filter(item => {
     if (typeof item.originEtaMin !== "number") return false;
-    if (item.originEtaMin >= 4) return false;
+
+    // Trigger at 5 minutes or less
+    if (item.originEtaMin > 5) return false;
 
     const key = getAlertKey(corridorId, item);
+
     if (alertedTrips.has(key)) return false;
 
     alertedTrips.add(key);
@@ -633,9 +631,9 @@ function handleAlerts(corridorId, arrivals){
   const first = newlyTriggered[0];
 
   document.getElementById("statusBox").innerText =
-    `Arrival alert: 4G vehicle ${first.vehicleId || "—"} is ${first.originEtaMin} minute${first.originEtaMin === 1 ? "" : "s"} away on Šilo tiltas → Europos aikštė.`;
+    `Arrival alert: 4G vehicle ${first.vehicleId || "—"} is ${first.originEtaMin} minute${first.originEtaMin === 1 ? "" : "s"} away at Šilo tiltas.`;
 }
-  
+
 async function loadBoard(forceMessage = false){
   if (isLoading) return;
   isLoading = true;
@@ -720,11 +718,11 @@ document.getElementById("alertBtn").addEventListener("click", async () => {
 
     if (alertsEnabled) {
       playBeep();
-      btn.innerText = "Disable 4-min alert";
+      btn.innerText = "Disable 5-min alert";
       btn.classList.remove("btn-secondary");
       btn.classList.add("btn-success");
     } else {
-      btn.innerText = "Enable 4-min alert";
+      btn.innerText = "Enable 5-min alert";
       btn.classList.remove("btn-success");
       btn.classList.add("btn-secondary");
     }
