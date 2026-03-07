@@ -14,8 +14,8 @@
       --muted: #9aa4b2;
       --border: #1f2937;
       --ok: #22c55e;
-      --warn: #f59e0b;
       --danger: #ef4444;
+      --card: #0b0f14;
     }
 
     * { box-sizing: border-box; }
@@ -26,14 +26,17 @@
       background: var(--bg);
       color: var(--text);
       font-family: Inter, Arial, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       padding: 20px;
     }
 
+    .page {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: 24px;
+    }
+
     .board {
-      width: min(1100px, 100%);
       background: linear-gradient(180deg, #0b0f14 0%, #090c10 100%);
       border: 1px solid var(--border);
       border-radius: 28px;
@@ -41,7 +44,7 @@
       box-shadow: 0 30px 80px rgba(0,0,0,.45);
     }
 
-    .header {
+    .page-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -51,7 +54,7 @@
       background: #0f141b;
     }
 
-    .stop-name {
+    .main-title {
       font-size: clamp(30px, 5vw, 52px);
       font-weight: 800;
       letter-spacing: .02em;
@@ -76,6 +79,22 @@
       min-height: 24px;
     }
 
+    .section {
+      border-top: 1px solid var(--border);
+    }
+
+    .section:first-of-type {
+      border-top: 0;
+    }
+
+    .section-title {
+      padding: 18px 32px 14px;
+      font-size: clamp(20px, 3vw, 30px);
+      font-weight: 800;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,.02);
+    }
+
     .table-head,
     .row {
       display: grid;
@@ -85,7 +104,7 @@
     }
 
     .table-head {
-      padding: 16px 32px;
+      padding: 14px 32px;
       color: var(--muted);
       font-size: 15px;
       text-transform: uppercase;
@@ -150,19 +169,8 @@
       text-transform: uppercase;
     }
 
-    .statusbar {
-      display: flex;
-      justify-content: space-between;
-      gap: 18px;
-      padding: 16px 32px 24px;
-      color: var(--muted);
-      font-size: 15px;
-      border-top: 1px solid var(--border);
-      flex-wrap: wrap;
-    }
-
     .empty,
-    .error {
+    .error-box {
       margin: 24px 32px;
       padding: 22px;
       border-radius: 20px;
@@ -174,10 +182,21 @@
       border: 1px solid rgba(255,255,255,.08);
     }
 
-    .error {
+    .error-box {
       background: rgba(239,68,68,.08);
       border: 1px solid rgba(239,68,68,.28);
       color: #fecaca;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 16px 32px 24px;
+      color: var(--muted);
+      font-size: 15px;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
     }
 
     .dot {
@@ -199,13 +218,27 @@
     }
 
     @media (max-width: 760px) {
-      .header {
+      body {
+        padding: 10px;
+      }
+
+      .page {
+        gap: 16px;
+      }
+
+      .page-header {
         flex-direction: column;
         align-items: flex-start;
+        padding: 22px 20px;
       }
 
       .clock {
         text-align: left;
+      }
+
+      .section-title {
+        padding: 16px 20px 12px;
+        font-size: 22px;
       }
 
       .table-head {
@@ -217,22 +250,15 @@
         padding: 12px 18px;
       }
 
-      .table-head > :first-child {
-        text-align: left;
-      }
-
-      .table-head > :nth-child(2) {
-        text-align: left;
-      }
-
-      .table-head > :last-child {
-        text-align: right;
-      }
+      .table-head > :first-child { text-align: left; }
+      .table-head > :nth-child(2) { text-align: left; }
+      .table-head > :last-child { text-align: right; }
 
       .row {
         grid-template-columns: 1fr;
         gap: 14px;
-        padding: 22px;
+        padding: 22px 18px;
+        min-height: auto;
       }
 
       .eta {
@@ -245,6 +271,15 @@
         font-size: 30px;
       }
 
+      .empty,
+      .error-box {
+        margin: 18px;
+      }
+
+      .footer {
+        padding: 14px 18px 18px;
+      }
+
       #qrWrap {
         width: 100%;
         margin-left: 0 !important;
@@ -253,59 +288,90 @@
   </style>
 </head>
 <body>
-  <main class="board">
-    <section class="header">
-      <div>
-        <h1 class="stop-name">4G Live Departures Board</h1>
-      </div>
-      <div class="clock">
-        <div class="clock-time" id="clockTime">--:--</div>
-        <div class="clock-date" id="clockDate">--</div>
-      </div>
-    </section>
-
-    <section class="table-head">
-      <div>Line</div>
-      <div>Destination</div>
-      <div>Arrival</div>
-    </section>
-
-    <section class="rows" id="rows"></section>
-    <div class="error" id="error" hidden></div>
-
-    <footer class="statusbar">
-      <div id="status"><span class="dot"></span>Connecting to live data…</div>
-      <div id="updated">Not updated yet</div>
-      <div id="qrWrap" style="margin-left:auto; display:flex; align-items:center; gap:12px;">
-        <img id="qrImage" alt="QR code for this board" style="width:84px;height:84px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:white;padding:6px;" />
-        <div style="max-width:180px; line-height:1.35;">
-          <div style="font-weight:700; color:var(--text);">Open on your phone</div>
-          <div style="color:var(--muted); font-size:13px;">Scan the QR code after you publish this page.</div>
+  <main class="page">
+    <section class="board">
+      <header class="page-header">
+        <div>
+          <h1 class="main-title">4G Live Departures Board</h1>
         </div>
-      </div>
-    </footer>
+        <div class="clock">
+          <div class="clock-time" id="clockTime">--:--</div>
+          <div class="clock-date" id="clockDate">--</div>
+        </div>
+      </header>
+
+      <section class="section">
+        <div class="section-title">Šilo Tiltas to Europos Aikštė</div>
+        <div class="table-head">
+          <div>Line</div>
+          <div>Destination</div>
+          <div>Arrival</div>
+        </div>
+        <div class="rows" id="rows-silo"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">Europos Aikštė to Šilo Tiltas</div>
+        <div class="table-head">
+          <div>Line</div>
+          <div>Destination</div>
+          <div>Arrival</div>
+        </div>
+        <div class="rows" id="rows-europa"></div>
+      </section>
+
+      <div class="error-box" id="error" hidden></div>
+
+      <footer class="footer">
+        <div id="status"><span class="dot"></span>Connecting to live data…</div>
+        <div id="updated">Not updated yet</div>
+        <div id="qrWrap" style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+          <img id="qrImage" alt="QR code for this board" style="width:84px;height:84px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:white;padding:6px;" />
+          <div style="max-width:180px; line-height:1.35;">
+            <div style="font-weight:700; color:var(--text);">Open on your phone</div>
+            <div style="color:var(--muted); font-size:13px;">Scan the QR code to open this board.</div>
+          </div>
+        </div>
+      </footer>
+    </section>
   </main>
 
   <script>
     const CONFIG = {
-      stopName: 'Šilo tiltas',
-      line: '4G',
-      stopIds: ['1139', '1129'],
       refreshMs: 20000,
       proxy: '',
       publicUrl: 'https://skujic.github.io/4g-live-board/',
       soundAlertMinutes: [1, 2],
-      sourceUrl: stopId => `https://www.stops.lt/vilnius/departures2.php?stopid=${stopId}`
+      sourceUrl: stopId => `https://www.stops.lt/vilnius/departures2.php?stopid=${stopId}`,
+      sections: [
+        {
+          key: 'silo',
+          rowsId: 'rows-silo',
+          line: '4G',
+          stopIds: ['1139', '1129'],
+          includeKeywords: ['pilait', 'autobus', 'kirtim', 'eišiški', 'tiekimo']
+        },
+        {
+          key: 'europa',
+          rowsId: 'rows-europa',
+          line: '4G',
+          stopIds: ['0104'],
+          includeKeywords: ['saul', 'senoji plytin', 'drujos', 'oland', 'universitet']
+        }
+      ]
     };
 
     const el = {
-      rows: document.getElementById('rows'),
-      error: document.getElementById('error'),
       status: document.getElementById('status'),
       updated: document.getElementById('updated'),
+      error: document.getElementById('error'),
       clockTime: document.getElementById('clockTime'),
       clockDate: document.getElementById('clockDate'),
-      qrImage: document.getElementById('qrImage')
+      qrImage: document.getElementById('qrImage'),
+      rows: {
+        silo: document.getElementById('rows-silo'),
+        europa: document.getElementById('rows-europa')
+      }
     };
 
     const alertState = new Set();
@@ -378,12 +444,12 @@
       } catch (e) {}
     }
 
-    function maybePlayArrivalAlert(arrivals) {
+    function maybePlayArrivalAlert(allArrivals) {
       const trackedKeys = new Set();
 
-      for (const item of arrivals) {
+      for (const item of allArrivals) {
         if (!CONFIG.soundAlertMinutes.includes(item.minutes)) continue;
-        const key = `${item.destination}|${item.minutes}`;
+        const key = `${item.sectionKey}|${item.destination}|${item.minutes}`;
         trackedKeys.add(key);
 
         if (!alertState.has(key)) {
@@ -438,7 +504,13 @@
       }[ch]));
     }
 
-    function parseDepartures(html, stopId) {
+    function matchesDirection(destination, keywords) {
+      if (!keywords || !keywords.length) return true;
+      const d = (destination || '').toLowerCase();
+      return keywords.some(k => d.includes(k));
+    }
+
+    function parseDepartures(html, stopId, sectionConfig) {
       const doc = new DOMParser().parseFromString(html, 'text/html');
       const text = doc.body?.innerText || '';
       const candidates = [];
@@ -446,7 +518,7 @@
 
       for (const row of rows) {
         const rowText = row.textContent.replace(/\s+/g, ' ').trim();
-        if (!rowText || !rowText.includes(CONFIG.line)) continue;
+        if (!rowText || !rowText.includes(sectionConfig.line)) continue;
 
         const minuteMatch = rowText.match(/(\d+\s*min|atvyksta|Atvyksta|^\d+$)/);
         const routeMatch = rowText.match(/\b(\d+G?|N\d+)\b/);
@@ -456,9 +528,14 @@
           .trim();
         const minutes = textMinutes(minuteMatch?.[0] || '');
 
-        if ((routeMatch?.[1] || '') === CONFIG.line && minutes !== null) {
+        if (
+          (routeMatch?.[1] || '') === sectionConfig.line &&
+          minutes !== null &&
+          matchesDirection(destination, sectionConfig.includeKeywords)
+        ) {
           candidates.push({
-            line: CONFIG.line,
+            sectionKey: sectionConfig.key,
+            line: sectionConfig.line,
             destination: destination || 'Direction unavailable',
             minutes,
             stopId,
@@ -467,8 +544,8 @@
         }
       }
 
-      if (!candidates.length && text.includes(CONFIG.line)) {
-        const regex = new RegExp(`\\b${CONFIG.line}\\b[^\\n]{0,120}?(\\d+\\s*min|atvyksta|Atvyksta|\\b\\d+\\b)`, 'g');
+      if (!candidates.length && text.includes(sectionConfig.line)) {
+        const regex = new RegExp(`\\b${sectionConfig.line}\\b[^\\n]{0,120}?(\\d+\\s*min|atvyksta|Atvyksta|\\b\\d+\\b)`, 'g');
 
         for (const match of text.matchAll(regex)) {
           const raw = match[0].replace(/\s+/g, ' ').trim();
@@ -476,17 +553,20 @@
 
           if (minutes !== null) {
             const destination = raw
-              .replace(new RegExp(`\\b${CONFIG.line}\\b`), '')
+              .replace(new RegExp(`\\b${sectionConfig.line}\\b`), '')
               .replace(/(\d+\s*min|atvyksta|Atvyksta|\b\d+\b)/, '')
               .trim() || 'Direction unavailable';
 
-            candidates.push({
-              line: CONFIG.line,
-              destination,
-              minutes,
-              stopId,
-              raw
-            });
+            if (matchesDirection(destination, sectionConfig.includeKeywords)) {
+              candidates.push({
+                sectionKey: sectionConfig.key,
+                line: sectionConfig.line,
+                destination,
+                minutes,
+                stopId,
+                raw
+              });
+            }
           }
         }
       }
@@ -496,15 +576,15 @@
         .slice(0, 6);
     }
 
-    function render(arrivals) {
-      el.error.hidden = true;
+    function renderSection(sectionKey, arrivals) {
+      const container = el.rows[sectionKey];
 
       if (!arrivals.length) {
-        el.rows.innerHTML = `<div class="empty">No live 4G departures found right now.</div>`;
+        container.innerHTML = `<div class="empty">No live 4G departures found right now.</div>`;
         return;
       }
 
-      el.rows.innerHTML = arrivals.map(item => {
+      container.innerHTML = arrivals.map(item => {
         const eta = item.minutes === 0 ? 'Now' : `${item.minutes} min`;
 
         return `
@@ -520,31 +600,47 @@
       }).join('');
     }
 
-    async function load() {
-      el.status.innerHTML = '<span class="dot"></span>Refreshing live data…';
-
+    async function loadSection(sectionConfig) {
       const results = await Promise.allSettled(
-        CONFIG.stopIds.map(async stopId => {
+        sectionConfig.stopIds.map(async stopId => {
           const html = await fetchUrl(CONFIG.sourceUrl(stopId));
-          return parseDepartures(html, stopId);
+          return parseDepartures(html, stopId, sectionConfig);
         })
       );
 
       const arrivals = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
       const okCount = results.filter(r => r.status === 'fulfilled').length;
 
-      if (!arrivals.length && okCount === 0) {
+      return {
+        key: sectionConfig.key,
+        arrivals: uniqueBy(arrivals, x => `${x.destination}|${x.minutes}`)
+          .sort((a, b) => a.minutes - b.minutes)
+          .slice(0, 4),
+        okCount,
+        requestedCount: sectionConfig.stopIds.length
+      };
+    }
+
+    async function load() {
+      el.status.innerHTML = '<span class="dot"></span>Refreshing live data…';
+
+      const sectionResults = await Promise.all(CONFIG.sections.map(loadSection));
+      const allArrivals = sectionResults.flatMap(x => x.arrivals);
+      const totalOk = sectionResults.reduce((sum, x) => sum + x.okCount, 0);
+      const totalRequested = sectionResults.reduce((sum, x) => sum + x.requestedCount, 0);
+
+      if (!allArrivals.length && totalOk === 0) {
         throw new Error('The browser could not read live data. This is usually a CORS block. Add a tiny proxy URL in CONFIG.proxy before publishing.');
       }
 
-      const merged = uniqueBy(arrivals, x => `${x.destination}|${x.minutes}`)
-        .sort((a, b) => a.minutes - b.minutes)
-        .slice(0, 4);
+      for (const section of sectionResults) {
+        renderSection(section.key, section.arrivals);
+      }
 
-      render(merged);
-      maybePlayArrivalAlert(merged);
+      maybePlayArrivalAlert(allArrivals);
 
-      el.status.innerHTML = `<span class="dot"></span>${okCount === CONFIG.stopIds.length ? 'Live data OK' : `Partial live data OK (${okCount}/${CONFIG.stopIds.length})`}`;
+      el.error.hidden = true;
+      el.status.innerHTML = `<span class="dot"></span>${totalOk === totalRequested ? 'Live data OK' : `Partial live data OK (${totalOk}/${totalRequested})`}`;
       el.updated.textContent = `Updated: ${new Date().toLocaleTimeString('en-GB')}`;
     }
 
@@ -557,7 +653,9 @@
         el.error.hidden = false;
         el.error.textContent = err.message;
         el.status.textContent = 'Live data unavailable';
-        el.rows.innerHTML = '';
+
+        renderSection('silo', []);
+        renderSection('europa', []);
       }
     }
 
