@@ -35,20 +35,12 @@ export default async function handler(req, res) {
         const tripId = parts[3];
         const vehicle = parts[4];
         const destination = parts[5];
-        const rawField7 = parts[6];
-        const rawField8 = parts[7];
+        const field7 = parts[6];
+        const field8 = parts[7];
 
         if (!["bus", "expressbus", "trol"].includes(type)) return null;
         if (line !== lineFilter) return null;
         if (directionFilter && direction !== directionFilter) return null;
-
-        // Conservative ETA parsing:
-        // only trust a field if it is a small non-negative integer.
-        const candidates = [rawField7, rawField8]
-          .map(v => Number(v))
-          .filter(v => Number.isInteger(v) && v >= 0 && v <= 120);
-
-        const etaMinutes = candidates.length ? Math.min(...candidates) : null;
 
         return {
           type,
@@ -57,22 +49,15 @@ export default async function handler(req, res) {
           tripId,
           vehicle,
           destination,
-          etaMinutes,
+          etaMinutes: null, // disabled until confirmed reliable
           queueIndex: index + 1,
-          rawField7,
-          rawField8,
+          rawField7: field7,
+          rawField8: field8,
           raw: row
         };
       })
-      .filter(Boolean)
-      .sort((a, b) => {
-        if (a.etaMinutes != null && b.etaMinutes != null) return a.etaMinutes - b.etaMinutes;
-        if (a.etaMinutes != null) return -1;
-        if (b.etaMinutes != null) return 1;
-        return a.queueIndex - b.queueIndex;
-      });
+      .filter(Boolean);
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
     return res.status(200).json({
       ok: true,
       stopId,
