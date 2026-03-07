@@ -64,7 +64,7 @@ body{
 .section-title{
   font-size:24px;
   font-weight:800;
-  margin-bottom:10px;
+  margin-bottom:8px;
 }
 .section-subtitle{
   font-size:13px;
@@ -73,7 +73,7 @@ body{
 }
 .table-head,.row{
   display:grid;
-  grid-template-columns:80px 160px 160px 120px 1fr;
+  grid-template-columns:80px 140px 140px 100px 1fr;
   gap:12px;
   align-items:center;
 }
@@ -94,14 +94,25 @@ body{
   font-weight:700;
   text-align:center;
 }
-.cell-eta,
+.cell-eta{
+  font-size:18px;
+  font-weight:800;
+}
 .cell-destination,
 .cell-travel,
 .cell-vehicle{
   font-weight:700;
 }
-.cell-eta{
-  font-size:18px;
+.badge{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  background:rgba(255,255,255,0.08);
+  color:#cbd5e1;
+  margin-left:8px;
+  vertical-align:middle;
 }
 .muted{
   color:#94a3b8;
@@ -126,10 +137,17 @@ body{
   }
 }
 @media (max-width:760px){
-  .title{font-size:26px;}
-  .clock-time{font-size:24px;}
+  body{
+    padding:12px;
+  }
+  .title{
+    font-size:26px;
+  }
+  .clock-time{
+    font-size:24px;
+  }
   .table-head,.row{
-    grid-template-columns:72px 120px 120px 90px 1fr;
+    grid-template-columns:70px 110px 110px 90px 1fr;
     gap:8px;
   }
   .cell-eta{
@@ -149,12 +167,15 @@ body{
     </div>
   </div>
 
-  <div class="status" id="statusBox">Loading realtime ETA…</div>
+  <div class="status" id="statusBox">Loading live ETA…</div>
 
   <div class="grid">
     <div class="section">
-      <div class="section-title">Šilo tiltas → Europos aikštė</div>
-      <div class="section-subtitle">4G · next 3 realtime arrivals</div>
+      <div class="section-title">
+        Šilo tiltas → Europos aikštė
+        <span class="badge">Estimated</span>
+      </div>
+      <div class="section-subtitle">4G · next up to 3 arrivals · 1129 → 0104</div>
       <div class="table-head">
         <div>Line</div>
         <div>At 1129</div>
@@ -166,8 +187,11 @@ body{
     </div>
 
     <div class="section">
-      <div class="section-title">Europos aikštė → Šilo tiltas</div>
-      <div class="section-subtitle">4G · next 3 realtime arrivals</div>
+      <div class="section-title">
+        Europos aikštė → Šilo tiltas
+        <span class="badge">Estimated</span>
+      </div>
+      <div class="section-subtitle">4G · next up to 3 arrivals · 0103 → 1139</div>
       <div class="table-head">
         <div>Line</div>
         <div>At 0103</div>
@@ -180,7 +204,7 @@ body{
   </div>
 
   <div class="footer">
-    ETA is pulled from GTFS Realtime trip updates and refreshes every 20 seconds.
+    ETA is estimated from GTFS realtime vehicle positions and refreshes every 20 seconds.
   </div>
 </div>
 
@@ -201,13 +225,19 @@ setInterval(updateClock, 1000);
 updateClock();
 
 function formatEta(minutes){
-  if (minutes === null || minutes === undefined) return '<span class="muted">—</span>';
-  if (minutes <= 0) return 'Due';
+  if (minutes === null || minutes === undefined) {
+    return '<span class="muted">—</span>';
+  }
+  if (minutes <= 0) {
+    return "Due";
+  }
   return `${minutes} min`;
 }
 
 function formatTravel(minutes){
-  if (minutes === null || minutes === undefined) return '<span class="muted">—</span>';
+  if (minutes === null || minutes === undefined) {
+    return '<span class="muted">—</span>';
+  }
   return `${minutes} min`;
 }
 
@@ -227,16 +257,23 @@ function renderEmpty(container, text){
   container.innerHTML = `<div class="empty">${text}</div>`;
 }
 
+function sanitizeArrivals(arrivals){
+  if (!Array.isArray(arrivals)) return [];
+
+  return arrivals
+    .filter(item => typeof item.originEtaMin === "number")
+    .filter(item => item.originEtaMin >= 0 && item.originEtaMin <= 90)
+    .sort((a, b) => a.originEtaMin - b.originEtaMin)
+    .slice(0, 3);
+}
+
 async function loadBoard(){
   const rowsPilaite = document.getElementById("rows-pilaite");
   const rowsSauletekis = document.getElementById("rows-sauletekis");
   const statusBox = document.getElementById("statusBox");
 
-  rowsPilaite.innerHTML = "";
-  rowsSauletekis.innerHTML = "";
-
   try {
-    const response = await fetch("/api/eta", { cache: "no-store" });
+    const response = await fetch(`/api/eta?t=${Date.now()}`, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`ETA request failed with status ${response.status}`);
     }
@@ -250,21 +287,33 @@ async function loadBoard(){
     const pilaite = corridors.find(c => c.id === "pilaite");
     const sauletekis = corridors.find(c => c.id === "sauletekis");
 
-    if (pilaite && Array.isArray(pilaite.arrivals) && pilaite.arrivals.length) {
-      rowsPilaite.innerHTML = pilaite.arrivals.map(renderRow).join("");
+    const pilaiteArrivals = sanitizeArrivals(pilaite?.arrivals);
+    const sauletekisArrivals = sanitizeArrivals(sauletekis?.arrivals);
+
+    if (pilaiteArrivals.length) {
+      rowsPilaite.innerHTML = pilaiteArrivals.map(renderRow).join("");
     } else {
-      renderEmpty(rowsPilaite, "No realtime 4G arrivals found right now.");
+      renderEmpty(rowsPilaite, "No live estimated 4G arrivals found right now.");
     }
 
-    if (sauletekis && Array.isArray(sauletekis.arrivals) && sauletekis.arrivals.length) {
-      rowsSauletekis.innerHTML = sauletekis.arrivals.map(renderRow).join("");
+    if (sauletekisArrivals.length) {
+      rowsSauletekis.innerHTML = sauletekisArrivals.map(renderRow).join("");
     } else {
-      renderEmpty(rowsSauletekis, "No realtime 4G arrivals found right now.");
+      renderEmpty(rowsSauletekis, "No live estimated 4G arrivals found right now.");
     }
 
-    statusBox.innerText = `Realtime ETA loaded successfully. Updated ${new Date().toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" })}.`;
+    const totalRows = pilaiteArrivals.length + sauletekisArrivals.length;
+    const updatedAt = new Date().toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
+    statusBox.innerText = totalRows
+      ? `Live ETA loaded successfully. ${totalRows} active arrival${totalRows === 1 ? "" : "s"} found. Updated ${updatedAt}.`
+      : `Live ETA loaded. No active estimated arrivals found right now. Updated ${updatedAt}.`;
+
   } catch (err) {
-    statusBox.innerText = "Could not load realtime ETA.";
+    statusBox.innerText = "Could not load live ETA.";
     renderEmpty(rowsPilaite, "No data.");
     renderEmpty(rowsSauletekis, "No data.");
     console.error(err);
@@ -276,3 +325,4 @@ setInterval(loadBoard, 20000);
 </script>
 
 </body>
+</html>
