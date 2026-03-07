@@ -8,7 +8,6 @@ const ROUTE_SHORT_NAME = "4G";
 const STATIC_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const REALTIME_TIMEOUT_MS = 15000;
 
-// Public-facing labels/codes for your UI
 const CORRIDORS = [
   {
     id: "pilaite",
@@ -132,12 +131,46 @@ function normalizeName(value) {
     .replace(/\p{Diacritic}/gu, "");
 }
 
-function getStopUpdateTime(stopUpdate) {
-  const arrival = stopUpdate?.arrival?.time ? Number(stopUpdate.arrival.time) : null;
-  const departure = stopUpdate?.departure?.time ? Number(stopUpdate.departure.time) : null;
+function parseGtfsTimeToSeconds(value) {
+  const s = String(value || "").trim();
+  const parts = s.split(":").map(Number);
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return null;
+  return parts[0] * 3600 + parts[1] * 60 + parts[2];
+}
 
-  if (Number.isFinite(arrival) && arrival > 0) return arrival;
-  if (Number.isFinite(departure) && departure > 0) return departure;
+function getServiceDateParts(now = new Date()) {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return { y, m, d };
+}
+
+function getServiceDayBaseUnix(now = new Date()) {
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  return Math.floor(midnight.getTime() / 1000);
+}
+
+function gtfsSecondsToUnix(gtfsSeconds, now = new Date()) {
+  if (!Number.isFinite(gtfsSeconds)) return null;
+  return getServiceDayBaseUnix(now) + gtfsSeconds;
+}
+
+function getStopUpdateTime(stopUpdate) {
+  const arrivalTime = stopUpdate?.arrival?.time != null ? Number(stopUpdate.arrival.time) : null;
+  const departureTime = stopUpdate?.departure?.time != null ? Number(stopUpdate.departure.time) : null;
+
+  if (Number.isFinite(arrivalTime) && arrivalTime > 0) return arrivalTime;
+  if (Number.isFinite(departureTime) && departureTime > 0) return departureTime;
+  return null;
+}
+
+function getStopUpdateDelay(stopUpdate) {
+  const arrivalDelay = stopUpdate?.arrival?.delay != null ? Number(stopUpdate.arrival.delay) : null;
+  const departureDelay = stopUpdate?.departure?.delay != null ? Number(stopUpdate.departure.delay) : null;
+
+  if (Number.isFinite(arrivalDelay)) return arrivalDelay;
+  if (Number.isFinite(departureDelay)) return departureDelay;
   return null;
 }
 
@@ -167,6 +200,41 @@ function findStopUpdate(updates, stopId, stopSequence) {
   }
 
   return { match: null, mode: null };
+}
+
+function estimateDelaySeconds(updates, targetSequence, stopTimesBySequence) {
+  if (!Array.isArray(updates) || !updates.length) return null;
+
+  let best = null;
+
+  for (const update of updates) {
+    const seq = Number(update.stopSequence);
+    if (!Number.isFinite(seq)) continue;
+
+    const scheduled = stopTimesBySequence.get(seq);
+    if (!scheduled) continue;
+
+    const exactTime = getStopUpdateTime(update);
+    const explicitDelay = getStopUpdateDelay(update);
+
+    let delay = null;
+
+    if (Number.isFinite(explicitDelay)) {
+      delay = explicitDelay;
+    } else if (Number.isFinite(exactTime) && Number.isFinite(scheduled.scheduledTs)) {
+      delay = exactTime - scheduled.scheduledTs;
+    }
+
+    if (!Number.isFinite(delay)) continue;
+
+    const distance = Math.abs(seq - targetSequence);
+
+    if (!best || distance < best.distance) {
+      best = { delay, distance, sourceSequence: seq };
+    }
+  }
+
+  return best;
 }
 
 async function loadStaticGtfs() {
@@ -202,10 +270,7 @@ async function loadStaticGtfs() {
     stopsById.set(stopId, {
       stopId,
       stopName: String(stop.stop_name || "").trim(),
-      stopNameNorm: normalizeName(stop.stop_name || ""),
-      stopCode: String(stop.stop_code || "").trim(),
-      stopLat: Number(stop.stop_lat),
-      stopLon: Number(stop.stop_lon)
+      stopNameNorm: normalizeName(stop.stop_name || "")
     });
   }
 
@@ -231,7 +296,11 @@ async function loadStaticGtfs() {
 
     const stopId = String(st.stop_id || "").trim();
     const sequence = Number(st.stop_sequence);
-    if (!stopId || !Number.isFinite(sequence)) continue;
+    const arrivalSecs = parseGtfsTimeToSeconds(st.arrival_time);
+    const departureSecs = parseGtfsTimeToSeconds(st.departure_time);
+    const scheduledSecs = Number.isFinite(arrivalSecs) ? arrivalSecs : departureSecs;
+
+    if (!stopId || !Number.isFinite(sequence) || !Number.isFinite(scheduledSecs)) continue;
 
     if (!stopTimesByTrip.has(tripId)) {
       stopTimesByTrip.set(tripId, []);
@@ -239,7 +308,10 @@ async function loadStaticGtfs() {
 
     stopTimesByTrip.get(tripId).push({
       stopId,
-      sequence
+      sequence,
+      arrivalSecs,
+      departureSecs,
+      scheduledSecs
     });
   }
 
@@ -252,7 +324,6 @@ async function loadStaticGtfs() {
     corridorTripIndex.set(corridor.id, new Map());
   }
 
-  // Match corridor stops by stop_name within each 4G trip
   for (const [tripId, stopsForTrip] of stopTimesByTrip.entries()) {
     for (const corridor of CORRIDORS) {
       const originCandidates = stopsForTrip.filter(s => {
@@ -281,7 +352,9 @@ async function loadStaticGtfs() {
               originStopId: origin.stopId,
               destinationStopId: destination.stopId,
               originSequence: origin.sequence,
-              destinationSequence: destination.sequence
+              destinationSequence: destination.sequence,
+              originScheduledSecs: origin.scheduledSecs,
+              destinationScheduledSecs: destination.scheduledSecs
             };
           }
         }
@@ -289,15 +362,25 @@ async function loadStaticGtfs() {
 
       if (!bestPair) continue;
 
-      corridorTripIndex.get(corridor.id).set(tripId, bestPair);
+      const stopTimesBySequence = new Map();
+      for (const stop of stopsForTrip) {
+        stopTimesBySequence.set(stop.sequence, {
+          stopId: stop.stopId,
+          scheduledSecs: stop.scheduledSecs
+        });
+      }
+
+      corridorTripIndex.get(corridor.id).set(tripId, {
+        ...bestPair,
+        stopTimesBySequence
+      });
     }
   }
 
   const data = {
     routesCount: targetRouteIds.size,
     tripsById,
-    corridorTripIndex,
-    stopsById
+    corridorTripIndex
   };
 
   staticCache = {
@@ -310,7 +393,8 @@ async function loadStaticGtfs() {
 
 async function loadRealtimeEta(debugMode = false) {
   const staticData = await loadStaticGtfs();
-  const nowSec = Math.floor(Date.now() / 1000);
+  const now = new Date();
+  const nowSec = Math.floor(now.getTime() / 1000);
 
   const realtimeBuffer = await fetchBuffer(TRIP_UPDATES_URL, REALTIME_TIMEOUT_MS);
   const feed = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(realtimeBuffer);
@@ -333,14 +417,11 @@ async function loadRealtimeEta(debugMode = false) {
       pilaite: 0,
       sauletekis: 0
     },
-    stopMatchModes: {
-      originByStopId: 0,
-      originBySequence: 0,
-      destinationByStopId: 0,
-      destinationBySequence: 0
-    },
+    exactOriginMatches: 0,
+    exactDestinationMatches: 0,
+    estimatedOriginMatches: 0,
+    estimatedDestinationMatches: 0,
     samples: {
-      matchingTripIds: [],
       pilaiteRows: [],
       sauletekisRows: []
     }
@@ -362,12 +443,7 @@ async function loadRealtimeEta(debugMode = false) {
     const tripMeta = staticData.tripsById.get(tripId);
     if (!tripMeta) continue;
 
-    if (!seenMatchingTripIds.has(tripId)) {
-      seenMatchingTripIds.add(tripId);
-      if (debug.samples.matchingTripIds.length < 10) {
-        debug.samples.matchingTripIds.push(tripId);
-      }
-    }
+    seenMatchingTripIds.add(tripId);
 
     const updates = Array.isArray(tripUpdate.stopTimeUpdate) ? tripUpdate.stopTimeUpdate : [];
 
@@ -389,24 +465,53 @@ async function loadRealtimeEta(debugMode = false) {
         corridorInfo.destinationSequence
       );
 
-      if (originResult.mode === "stop_id") debug.stopMatchModes.originByStopId += 1;
-      if (originResult.mode === "stop_sequence") debug.stopMatchModes.originBySequence += 1;
-      if (destinationResult.mode === "stop_id") debug.stopMatchModes.destinationByStopId += 1;
-      if (destinationResult.mode === "stop_sequence") debug.stopMatchModes.destinationBySequence += 1;
+      let originTs = getStopUpdateTime(originResult.match);
+      let destinationTs = getStopUpdateTime(destinationResult.match);
 
-      const originTs = getStopUpdateTime(originResult.match);
-      const destinationTs = getStopUpdateTime(destinationResult.match);
+      if (Number.isFinite(originTs)) {
+        debug.exactOriginMatches += 1;
+      }
+      if (Number.isFinite(destinationTs)) {
+        debug.exactDestinationMatches += 1;
+      }
 
-      if (!originTs || originTs < nowSec - 120) continue;
+      if (!Number.isFinite(originTs)) {
+        const delayInfo = estimateDelaySeconds(
+          updates,
+          corridorInfo.originSequence,
+          corridorInfo.stopTimesBySequence
+        );
+
+        if (delayInfo && Number.isFinite(corridorInfo.originScheduledSecs)) {
+          originTs = gtfsSecondsToUnix(corridorInfo.originScheduledSecs, now) + delayInfo.delay;
+          debug.estimatedOriginMatches += 1;
+        }
+      }
+
+      if (!Number.isFinite(destinationTs)) {
+        const delayInfo = estimateDelaySeconds(
+          updates,
+          corridorInfo.destinationSequence,
+          corridorInfo.stopTimesBySequence
+        );
+
+        if (delayInfo && Number.isFinite(corridorInfo.destinationScheduledSecs)) {
+          destinationTs = gtfsSecondsToUnix(corridorInfo.destinationScheduledSecs, now) + delayInfo.delay;
+          debug.estimatedDestinationMatches += 1;
+        }
+      }
+
+      if (!Number.isFinite(originTs)) continue;
+      if (originTs < nowSec - 120) continue;
 
       const row = {
         tripId,
         headsign: tripMeta.headsign || null,
         vehicleId: tripUpdate.vehicle?.id ? String(tripUpdate.vehicle.id) : null,
         originEtaMin: minutesFromNow(originTs, nowSec),
-        destinationEtaMin: destinationTs ? minutesFromNow(destinationTs, nowSec) : null,
+        destinationEtaMin: Number.isFinite(destinationTs) ? minutesFromNow(destinationTs, nowSec) : null,
         travelMinutes:
-          destinationTs && destinationTs >= originTs
+          Number.isFinite(destinationTs) && destinationTs >= originTs
             ? Math.round((destinationTs - originTs) / 60)
             : null
       };
