@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>4G Debug Board</title>
+<title>4G Live Board</title>
 <style>
 body{
   margin:0;
@@ -13,7 +13,7 @@ body{
   padding:20px;
 }
 .container{
-  max-width:1200px;
+  max-width:1100px;
   margin:auto;
   background:#0b0f14;
   border-radius:20px;
@@ -61,7 +61,7 @@ body{
 }
 .table-head,.row{
   display:grid;
-  grid-template-columns:100px 90px 1fr 110px 90px;
+  grid-template-columns:110px 110px 1fr;
   gap:10px;
   align-items:center;
 }
@@ -90,16 +90,6 @@ body{
   font-size:18px;
   font-weight:700;
 }
-.cell-minutes{
-  text-align:right;
-  font-size:18px;
-  font-weight:800;
-}
-.cell-raw{
-  text-align:right;
-  color:#9aa4b2;
-  font-size:14px;
-}
 .empty{
   color:#9aa4b2;
   padding:8px 0;
@@ -114,8 +104,7 @@ body{
   .title{font-size:26px;}
   .clock-time{font-size:24px;}
   .table-head,.row{
-    grid-template-columns:70px 70px 1fr 70px 60px;
-    font-size:11px;
+    grid-template-columns:80px 80px 1fr;
   }
   .cell-destination{
     font-size:15px;
@@ -127,41 +116,37 @@ body{
 
 <div class="container">
   <div class="header">
-    <div class="title">4G Debug Board</div>
+    <div class="title">4G Live Board</div>
     <div class="clock">
       <div class="clock-time" id="clockTime">--:--</div>
       <div class="clock-date" id="clockDate">--</div>
     </div>
   </div>
 
-  <div class="status" id="statusBox">Loading live debug data…</div>
+  <div class="status" id="statusBox">Loading live departures…</div>
 
   <div class="section">
-    <div class="section-title">Debug Section A — Stop 1129</div>
+    <div class="section-title">Šilo Tiltas → Pilaitė</div>
     <div class="table-head">
       <div>Stop</div>
       <div>Line</div>
       <div>Destination</div>
-      <div>Value</div>
-      <div>Raw</div>
     </div>
     <div id="rows-1129"></div>
   </div>
 
   <div class="section">
-    <div class="section-title">Debug Section B — Stop 0104</div>
+    <div class="section-title">Europos Aikštė → Pilaitė</div>
     <div class="table-head">
       <div>Stop</div>
       <div>Line</div>
       <div>Destination</div>
-      <div>Value</div>
-      <div>Raw</div>
     </div>
     <div id="rows-0104"></div>
   </div>
 
   <div class="footer">
-    This debug version shows the exact 4G records returned by your Vercel API. Refresh every 20 seconds.
+    Live destination data refresh every 20 seconds.
   </div>
 </div>
 
@@ -183,22 +168,30 @@ async function fetchStop(stop){
 }
 
 function renderRow(stopId, item){
-  const valueText = Number.isFinite(item.minutes) ? item.minutes : "-";
-  const rawText = item.rawField ?? "-";
-
   return `
     <div class="row">
       <div class="cell-stop">${stopId}</div>
       <div class="cell-line">${item.line || "4G"}</div>
       <div class="cell-destination">${item.destination || "-"}</div>
-      <div class="cell-minutes">${valueText}</div>
-      <div class="cell-raw">${rawText}</div>
     </div>
   `;
 }
 
 function renderEmpty(container, text){
   container.innerHTML = `<div class="empty">${text}</div>`;
+}
+
+function uniqueByDestination(items){
+  const seen = new Set();
+  const out = [];
+  for(const item of items){
+    const key = `${item.line}|${item.destination}`;
+    if(!seen.has(key)){
+      seen.add(key);
+      out.push(item);
+    }
+  }
+  return out;
 }
 
 async function loadBoard(){
@@ -215,21 +208,24 @@ async function loadBoard(){
       fetchStop("0104")
     ]);
 
-    if (data1129.ok && Array.isArray(data1129.departures) && data1129.departures.length){
-      rows1129.innerHTML = data1129.departures.map(item => renderRow("1129", item)).join("");
+    const departures1129 = Array.isArray(data1129.departures) ? uniqueByDestination(data1129.departures) : [];
+    const departures0104 = Array.isArray(data0104.departures) ? uniqueByDestination(data0104.departures) : [];
+
+    if (departures1129.length){
+      rows1129.innerHTML = departures1129.map(item => renderRow("1129", item)).join("");
     } else {
-      renderEmpty(rows1129, "No 4G rows found for stop 1129.");
+      renderEmpty(rows1129, "No live 4G rows found for this stop.");
     }
 
-    if (data0104.ok && Array.isArray(data0104.departures) && data0104.departures.length){
-      rows0104.innerHTML = data0104.departures.map(item => renderRow("0104", item)).join("");
+    if (departures0104.length){
+      rows0104.innerHTML = departures0104.map(item => renderRow("0104", item)).join("");
     } else {
-      renderEmpty(rows0104, "No 4G rows found for stop 0104.");
+      renderEmpty(rows0104, "No live 4G rows found for this stop.");
     }
 
-    statusBox.innerText = "Debug data loaded. Check destinations and values for each stop.";
+    statusBox.innerText = "Live destination data loaded successfully.";
   } catch (e){
-    statusBox.innerText = "Could not load debug data.";
+    statusBox.innerText = "Could not load live departures.";
     renderEmpty(rows1129, "No data.");
     renderEmpty(rows0104, "No data.");
     console.error(e);
