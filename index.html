@@ -207,7 +207,7 @@ const STOP_EUROPA = ["0104"]
 
 async function fetchStop(stop){
 
-let url=`https://www.stops.lt/vilnius/departures2.php?stopid=${stop}`
+let url=`/api/departures?stop=${stop}`
 
 let r = await fetch(url)
 
