@@ -1,6 +1,6 @@
 export default async function handler(req, res) {
   const stopId = req.query.stop;
-  const lineFilter = (req.query.line || "4G").trim();
+  const lineFilter = (req.query.line || "4G").trim().toLowerCase();
 
   if (!stopId) {
     res.status(400).json({ error: "missing stop id", ok: false });
@@ -29,22 +29,21 @@ export default async function handler(req, res) {
     for (const row of rows) {
       const parts = row.split(",");
 
-      // Expected format:
-      // bus,119,a-b,35751,575KWNZ,Egliškės,-1,45
+      // Example:
+      // expressbus,4g,b-a,36541,8002KWZ,Pilaitė,-1,45
       if (parts.length < 8) continue;
 
-      const type = parts[0]?.trim();
-      const line = parts[1]?.trim();
-      const destination = parts[5]?.trim();
-      const minutesRaw = parts[7]?.trim();
-      const minutes = Number(minutesRaw);
+      const type = (parts[0] || "").trim().toLowerCase();
+      const line = (parts[1] || "").trim().toLowerCase();
+      const destination = (parts[5] || "").trim();
+      const minutes = Number((parts[7] || "").trim());
 
-      if (type !== "bus") continue;
+      if (!["bus", "expressbus", "trol"].includes(type)) continue;
       if (line !== lineFilter) continue;
       if (!Number.isFinite(minutes)) continue;
 
       parsed.push({
-        line,
+        line: line.toUpperCase(),
         destination,
         minutes
       });
@@ -64,7 +63,7 @@ export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.status(200).json({
       stopId,
-      lineFilter,
+      lineFilter: lineFilter.toUpperCase(),
       count: unique.length,
       departures: unique,
       ok: true,
