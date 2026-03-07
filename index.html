@@ -573,22 +573,39 @@ function playBeep(){
 
   const now = audioContext.currentTime;
 
-  for (let i = 0; i < 2; i++) {
+  const notes = [
+    { freq: 1046.5, start: 0.00, duration: 0.18 }, // C6
+    { freq: 1318.5, start: 0.22, duration: 0.18 }, // E6
+    { freq: 1568.0, start: 0.44, duration: 0.26 }  // G6
+  ];
+
+  notes.forEach(note => {
     const osc = audioContext.createOscillator();
     const gain = audioContext.createGain();
+    const filter = audioContext.createBiquadFilter();
 
-    osc.type = "sine";
-    osc.frequency.value = i === 0 ? 880 : 660;
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(note.freq, now + note.start);
 
-    gain.gain.setValueAtTime(0.0001, now + i * 0.32);
-    gain.gain.exponentialRampToValueAtTime(0.2, now + i * 0.32 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.32 + 0.22);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(2200, now + note.start);
 
-    osc.connect(gain);
+    gain.gain.setValueAtTime(0.0001, now + note.start);
+    gain.gain.exponentialRampToValueAtTime(0.5, now + note.start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + note.start + 0.10);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
+
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(audioContext.destination);
 
-    osc.start(now + i * 0.32);
-    osc.stop(now + i * 0.32 + 0.24);
+    osc.start(now + note.start);
+    osc.stop(now + note.start + note.duration + 0.02);
+  });
+
+  // Optional phone vibration
+  if (navigator.vibrate) {
+    navigator.vibrate([180, 70, 180]);
   }
 }
 
