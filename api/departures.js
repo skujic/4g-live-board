@@ -18,9 +18,10 @@ export default async function handler(req, res) {
 
     const html = await response.text();
 
-    // Extract only 4G arrivals on the server side
     const matches = [...html.matchAll(/4G[\s\S]{0,120}?(\d+)\s*min/gi)];
-    const minutes = [...new Set(matches.map(m => Number(m[1])).filter(n => Number.isFinite(n)))].sort((a, b) => a - b);
+    const minutes = [...new Set(
+      matches.map(m => Number(m[1])).filter(n => Number.isFinite(n))
+    )].sort((a, b) => a - b);
 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.status(200).json({
