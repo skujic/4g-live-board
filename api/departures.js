@@ -1,13 +1,13 @@
 export default async function handler(req, res) {
-  const stopId = req.query.stop;
-  const lineFilter = (req.query.line || "4G").trim().toLowerCase();
+  const stopId = String(req.query.stop || "").trim();
+  const lineFilter = String(req.query.line || "4G").trim().toLowerCase();
+  const directionFilter = String(req.query.direction || "").trim().toLowerCase();
 
   if (!stopId) {
-    res.status(400).json({ error: "missing stop id", ok: false });
-    return;
+    return res.status(400).json({ error: "missing stop id", ok: false });
   }
 
-  const url = `https://www.stops.lt/vilnius/departures2.php?stopid=${stopId}`;
+  const url = `https://www.stops.lt/vilnius/departures2.php?stopid=${encodeURIComponent(stopId)}`;
 
   try {
     const response = await fetch(url, {
@@ -24,51 +24,69 @@ export default async function handler(req, res) {
       .map(r => r.trim())
       .filter(Boolean);
 
-    const parsed = [];
+    const parsed = rows
+      .map((row, index) => {
+        const parts = row.split(",").map(v => (v || "").trim());
+        if (parts.length < 8) return null;
 
-    for (const row of rows) {
-      const parts = row.split(",");
-      if (parts.length < 8) continue;
+        const type = parts[0].toLowerCase();
+        const line = parts[1].toLowerCase();
+        const direction = parts[2].toLowerCase();
+        const tripId = parts[3];
+        const vehicle = parts[4];
+        const destination = parts[5];
+        const rawField7 = parts[6];
+        const rawField8 = parts[7];
 
-      const type = (parts[0] || "").trim().toLowerCase();
-      const line = (parts[1] || "").trim().toLowerCase();
-      const direction = (parts[2] || "").trim();
-      const tripId = (parts[3] || "").trim();
-      const vehicle = (parts[4] || "").trim();
-      const destination = (parts[5] || "").trim();
-      const field7 = (parts[6] || "").trim();
-      const field8 = (parts[7] || "").trim();
+        if (!["bus", "expressbus", "trol"].includes(type)) return null;
+        if (line !== lineFilter) return null;
+        if (directionFilter && direction !== directionFilter) return null;
 
-      if (!["bus", "expressbus", "trol"].includes(type)) continue;
-      if (line !== lineFilter) continue;
+        // Conservative ETA parsing:
+        // only trust a field if it is a small non-negative integer.
+        const candidates = [rawField7, rawField8]
+          .map(v => Number(v))
+          .filter(v => Number.isInteger(v) && v >= 0 && v <= 120);
 
-      parsed.push({
-        type,
-        line: line.toUpperCase(),
-        direction,
-        tripId,
-        vehicle,
-        destination,
-        rawField7: field7,
-        rawField8: field8,
-        raw: row
+        const etaMinutes = candidates.length ? Math.min(...candidates) : null;
+
+        return {
+          type,
+          line: line.toUpperCase(),
+          direction,
+          tripId,
+          vehicle,
+          destination,
+          etaMinutes,
+          queueIndex: index + 1,
+          rawField7,
+          rawField8,
+          raw: row
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.etaMinutes != null && b.etaMinutes != null) return a.etaMinutes - b.etaMinutes;
+        if (a.etaMinutes != null) return -1;
+        if (b.etaMinutes != null) return 1;
+        return a.queueIndex - b.queueIndex;
       });
-    }
 
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.status(200).json({
+    return res.status(200).json({
+      ok: true,
       stopId,
       lineFilter: lineFilter.toUpperCase(),
+      directionFilter: directionFilter || null,
       count: parsed.length,
       departures: parsed,
-      ok: true,
       preview: rows.slice(0, 10)
     });
   } catch (err) {
-    res.status(500).json({
+    return res.status(500).json({
+      ok: false,
       error: "fetch failed",
-      details: String(err),
-      ok: false
+      details: String(err)
     });
   }
 }
