@@ -1,0 +1,8 @@
+{
+  "name": "vilnius-4g-live-board",
+  "private": true,
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "gtfs-realtime-bindings": "^1.1.1"
+  }
+}
