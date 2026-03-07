@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>4G Live Board</title>
+<title>4G Live ETA Board</title>
 <style>
 body{
   margin:0;
@@ -13,7 +13,7 @@ body{
   padding:20px;
 }
 .container{
-  max-width:1200px;
+  max-width:1280px;
   margin:auto;
   background:#0b0f14;
   border-radius:20px;
@@ -62,7 +62,7 @@ body{
   border-right:1px solid #1f2937;
 }
 .section-title{
-  font-size:22px;
+  font-size:24px;
   font-weight:800;
   margin-bottom:10px;
 }
@@ -73,8 +73,8 @@ body{
 }
 .table-head,.row{
   display:grid;
-  grid-template-columns:100px 100px 1fr 100px;
-  gap:10px;
+  grid-template-columns:80px 160px 160px 120px 1fr;
+  gap:12px;
   align-items:center;
 }
 .table-head{
@@ -84,12 +84,8 @@ body{
   margin-bottom:10px;
 }
 .row{
-  padding:12px 0;
+  padding:14px 0;
   border-top:1px solid rgba(255,255,255,0.05);
-}
-.cell-stop{
-  color:#cbd5e1;
-  font-weight:700;
 }
 .cell-line{
   background:#1f6feb;
@@ -98,18 +94,22 @@ body{
   font-weight:700;
   text-align:center;
 }
-.cell-destination{
-  font-size:18px;
+.cell-eta,
+.cell-destination,
+.cell-travel,
+.cell-vehicle{
   font-weight:700;
 }
-.cell-status{
-  text-align:right;
+.cell-eta{
+  font-size:18px;
+}
+.muted{
   color:#94a3b8;
-  font-weight:700;
+  font-weight:600;
 }
 .empty{
   color:#9aa4b2;
-  padding:8px 0;
+  padding:12px 0;
 }
 .footer{
   padding:15px 20px;
@@ -117,7 +117,7 @@ body{
   font-size:13px;
   color:#9aa4b2;
 }
-@media (max-width:900px){
+@media (max-width:980px){
   .grid{
     grid-template-columns:1fr;
   }
@@ -129,10 +129,11 @@ body{
   .title{font-size:26px;}
   .clock-time{font-size:24px;}
   .table-head,.row{
-    grid-template-columns:72px 72px 1fr 72px;
+    grid-template-columns:72px 120px 120px 90px 1fr;
+    gap:8px;
   }
-  .cell-destination{
-    font-size:15px;
+  .cell-eta{
+    font-size:16px;
   }
 }
 </style>
@@ -141,54 +142,49 @@ body{
 
 <div class="container">
   <div class="header">
-    <div class="title">4G Live Board</div>
+    <div class="title">4G Live ETA Board</div>
     <div class="clock">
       <div class="clock-time" id="clockTime">--:--</div>
       <div class="clock-date" id="clockDate">--</div>
     </div>
   </div>
 
-  <div class="status" id="statusBox">Loading live departures…</div>
+  <div class="status" id="statusBox">Loading realtime ETA…</div>
 
   <div class="grid">
     <div class="section">
-      <div class="section-title">Towards Pilaitė</div>
-      <div class="section-subtitle">Šilo tiltas (1129) · Europos aikštė (0104)</div>
+      <div class="section-title">Šilo tiltas → Europos aikštė</div>
+      <div class="section-subtitle">4G · next 3 realtime arrivals</div>
       <div class="table-head">
-        <div>Stop</div>
         <div>Line</div>
-        <div>Destination</div>
-        <div>Status</div>
+        <div>At 1129</div>
+        <div>At 0104</div>
+        <div>Travel</div>
+        <div>Vehicle</div>
       </div>
       <div id="rows-pilaite"></div>
     </div>
 
     <div class="section">
-      <div class="section-title">Towards Saulėtekis</div>
-      <div class="section-subtitle">Šilo tiltas (1139) · Europos aikštė (0103)</div>
+      <div class="section-title">Europos aikštė → Šilo tiltas</div>
+      <div class="section-subtitle">4G · next 3 realtime arrivals</div>
       <div class="table-head">
-        <div>Stop</div>
         <div>Line</div>
-        <div>Destination</div>
-        <div>Status</div>
+        <div>At 0103</div>
+        <div>At 1139</div>
+        <div>Travel</div>
+        <div>Vehicle</div>
       </div>
       <div id="rows-sauletekis"></div>
     </div>
   </div>
 
   <div class="footer">
-    Live 4G data refreshes every 20 seconds.
+    ETA is pulled from GTFS Realtime trip updates and refreshes every 20 seconds.
   </div>
 </div>
 
 <script>
-const BOARD_CONFIG = [
-  { stop: "1129", direction: "b-a", bucket: "pilaite", label: "1129" },
-  { stop: "0104", direction: "b-a", bucket: "pilaite", label: "0104" },
-  { stop: "1139", direction: "a-b", bucket: "sauletekis", label: "1139" },
-  { stop: "0103", direction: "a-b", bucket: "sauletekis", label: "0103" }
-];
-
 function updateClock(){
   const now = new Date();
   document.getElementById("clockTime").innerText =
@@ -204,40 +200,31 @@ function updateClock(){
 setInterval(updateClock, 1000);
 updateClock();
 
-async function fetchStop(stop, direction){
-  const url = `/api/departures?stop=${stop}&line=4G&direction=${encodeURIComponent(direction)}`;
-  const r = await fetch(url, { cache:"no-store" });
-  return await r.json();
+function formatEta(minutes){
+  if (minutes === null || minutes === undefined) return '<span class="muted">—</span>';
+  if (minutes <= 0) return 'Due';
+  return `${minutes} min`;
+}
+
+function formatTravel(minutes){
+  if (minutes === null || minutes === undefined) return '<span class="muted">—</span>';
+  return `${minutes} min`;
 }
 
 function renderRow(item){
   return `
     <div class="row">
-      <div class="cell-stop">${item.stopLabel}</div>
-      <div class="cell-line">${item.line || "4G"}</div>
-      <div class="cell-destination">${item.destination || "-"}</div>
-      <div class="cell-status">Live</div>
+      <div class="cell-line">4G</div>
+      <div class="cell-eta">${formatEta(item.originEtaMin)}</div>
+      <div class="cell-destination">${formatEta(item.destinationEtaMin)}</div>
+      <div class="cell-travel">${formatTravel(item.travelMinutes)}</div>
+      <div class="cell-vehicle">${item.vehicleId || '<span class="muted">—</span>'}</div>
     </div>
   `;
 }
 
 function renderEmpty(container, text){
   container.innerHTML = `<div class="empty">${text}</div>`;
-}
-
-function dedupe(items){
-  const seen = new Set();
-  const out = [];
-
-  for (const item of items) {
-    const key = `${item.stopLabel}|${item.destination}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(item);
-    }
-  }
-
-  return out;
 }
 
 async function loadBoard(){
@@ -249,47 +236,38 @@ async function loadBoard(){
   rowsSauletekis.innerHTML = "";
 
   try {
-    const responses = await Promise.all(
-      BOARD_CONFIG.map(async cfg => {
-        const data = await fetchStop(cfg.stop, cfg.direction);
-        const departures = Array.isArray(data.departures) ? data.departures : [];
-
-        return departures.map(item => ({
-          ...item,
-          stopLabel: cfg.label,
-          bucket: cfg.bucket
-        }));
-      })
-    );
-
-    const merged = responses.flat();
-
-    const pilaite = dedupe(
-      merged.filter(item => item.bucket === "pilaite")
-    );
-
-    const sauletekis = dedupe(
-      merged.filter(item => item.bucket === "sauletekis")
-    );
-
-    if (pilaite.length) {
-      rowsPilaite.innerHTML = pilaite.map(renderRow).join("");
-    } else {
-      renderEmpty(rowsPilaite, "No live 4G rows found.");
+    const response = await fetch("/api/eta", { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`ETA request failed with status ${response.status}`);
     }
 
-    if (sauletekis.length) {
-      rowsSauletekis.innerHTML = sauletekis.map(renderRow).join("");
-    } else {
-      renderEmpty(rowsSauletekis, "No live 4G rows found.");
+    const data = await response.json();
+    if (!data.ok) {
+      throw new Error(data.error || "ETA request failed");
     }
 
-    statusBox.innerText = "Live 4G departures loaded successfully.";
-  } catch (e) {
-    statusBox.innerText = "Could not load live departures.";
+    const corridors = Array.isArray(data.corridors) ? data.corridors : [];
+    const pilaite = corridors.find(c => c.id === "pilaite");
+    const sauletekis = corridors.find(c => c.id === "sauletekis");
+
+    if (pilaite && Array.isArray(pilaite.arrivals) && pilaite.arrivals.length) {
+      rowsPilaite.innerHTML = pilaite.arrivals.map(renderRow).join("");
+    } else {
+      renderEmpty(rowsPilaite, "No realtime 4G arrivals found right now.");
+    }
+
+    if (sauletekis && Array.isArray(sauletekis.arrivals) && sauletekis.arrivals.length) {
+      rowsSauletekis.innerHTML = sauletekis.arrivals.map(renderRow).join("");
+    } else {
+      renderEmpty(rowsSauletekis, "No realtime 4G arrivals found right now.");
+    }
+
+    statusBox.innerText = `Realtime ETA loaded successfully. Updated ${new Date().toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" })}.`;
+  } catch (err) {
+    statusBox.innerText = "Could not load realtime ETA.";
     renderEmpty(rowsPilaite, "No data.");
     renderEmpty(rowsSauletekis, "No data.");
-    console.error(e);
+    console.error(err);
   }
 }
 
@@ -298,4 +276,3 @@ setInterval(loadBoard, 20000);
 </script>
 
 </body>
-</html>
