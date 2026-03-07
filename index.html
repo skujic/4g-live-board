@@ -595,9 +595,12 @@ function playBeep(){
 function handleAlerts(corridorId, arrivals){
   if (!alertsEnabled) return;
 
+  // Sound alert only for Šilo tiltas → Europos aikštė
+  if (corridorId !== "pilaite") return;
+
   const newlyTriggered = arrivals.filter(item => {
     if (typeof item.originEtaMin !== "number") return false;
-    if (item.originEtaMin > 4) return false;
+    if (item.originEtaMin >= 4) return false;
 
     const key = getAlertKey(corridorId, item);
     if (alertedTrips.has(key)) return false;
@@ -611,14 +614,11 @@ function handleAlerts(corridorId, arrivals){
   playBeep();
 
   const first = newlyTriggered[0];
-  const directionLabel = corridorId === "pilaite"
-    ? "Šilo tiltas → Europos aikštė"
-    : "Europos aikštė → Šilo tiltas";
 
   document.getElementById("statusBox").innerText =
-    `Arrival alert: 4G vehicle ${first.vehicleId || "—"} is ${first.originEtaMin} minute${first.originEtaMin === 1 ? "" : "s"} away on ${directionLabel}.`;
+    `Arrival alert: 4G vehicle ${first.vehicleId || "—"} is ${first.originEtaMin} minute${first.originEtaMin === 1 ? "" : "s"} away on Šilo tiltas → Europos aikštė.`;
 }
-
+  
 async function loadBoard(forceMessage = false){
   if (isLoading) return;
   isLoading = true;
